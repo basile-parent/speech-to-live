@@ -68,6 +68,12 @@ export function SpeechScreen() {
     }
   }, [isListening, start, stop]);
 
+  const hasContent =
+    finalTranscript.length > 0 || partialTranscript.length > 0;
+  const accessibilityTranscript = [finalTranscript, partialTranscript]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <View
       style={[styles.container, {paddingTop: topInset}]}
@@ -76,27 +82,27 @@ export function SpeechScreen() {
         Speech to Live
       </Text>
 
-      <View style={styles.finalSection}>
-        <Text style={styles.label}>Texte final</Text>
-        <ScrollView
-          style={styles.finalScroll}
-          contentContainerStyle={styles.finalScrollContent}
-          accessibilityLiveRegion="polite"
-          accessibilityLabel={`Texte final: ${finalTranscript || 'vide'}`}>
-          <Text style={styles.finalText}>{finalTranscript || '—'}</Text>
-        </ScrollView>
-      </View>
-
-      <View style={styles.partialSection}>
-        <Text style={styles.label}>Texte partiel</Text>
-        <Text
-          style={styles.partialText}
-          numberOfLines={2}
-          accessibilityLiveRegion="polite"
-          accessibilityLabel={`Texte partiel: ${partialTranscript || 'vide'}`}>
-          {partialTranscript || '—'}
-        </Text>
-      </View>
+      <ScrollView
+        style={styles.transcriptScroll}
+        contentContainerStyle={styles.transcriptContent}
+        accessibilityLiveRegion="polite"
+        accessibilityLabel={`Transcription: ${accessibilityTranscript || 'vide'}`}>
+        {hasContent ? (
+          <Text style={styles.transcript}>
+            {finalTranscript.length > 0 ? (
+              <Text style={styles.finalText}>{finalTranscript}</Text>
+            ) : null}
+            {finalTranscript.length > 0 && partialTranscript.length > 0
+              ? '\n'
+              : null}
+            {partialTranscript.length > 0 ? (
+              <Text style={styles.partialText}>{partialTranscript}</Text>
+            ) : null}
+          </Text>
+        ) : (
+          <Text style={styles.placeholder}>—</Text>
+        )}
+      </ScrollView>
 
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
@@ -133,41 +139,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 12,
   },
-  finalSection: {
+  transcriptScroll: {
     flex: 1,
     paddingHorizontal: 24,
-    gap: 8,
     minHeight: 0,
   },
-  finalScroll: {
-    flex: 1,
-  },
-  finalScrollContent: {
+  transcriptContent: {
     flexGrow: 1,
     paddingBottom: 8,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#555555',
-    textTransform: 'uppercase',
+  transcript: {
+    fontSize: 22,
+    lineHeight: 30,
   },
   finalText: {
+    color: '#111111',
+    fontStyle: 'normal',
+  },
+  partialText: {
+    color: '#888888',
+    fontStyle: 'italic',
+  },
+  placeholder: {
     fontSize: 22,
     lineHeight: 30,
     color: '#111111',
-  },
-  partialSection: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    gap: 4,
-  },
-  partialText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#666666',
-    fontStyle: 'italic',
-    minHeight: 44,
   },
   actions: {
     paddingHorizontal: 24,
