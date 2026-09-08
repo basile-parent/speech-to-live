@@ -14,6 +14,8 @@ export interface Spec extends TurboModule {
   getAudioSensitivity(): Promise<number>;
   /** Bottom system inset in dp (nav bar / control buttons). */
   getBottomInset(): Promise<number>;
+  setDarkMode(enabled: boolean): Promise<void>;
+  isDarkModeEnabled(): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }

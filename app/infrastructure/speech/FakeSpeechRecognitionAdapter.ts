@@ -7,6 +7,7 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
   private listening = false;
   private speakerMode = false;
   private audioSensitivity = 0.5;
+  private darkMode = true;
   private readonly listeners = new Set<Listener>();
   language = 'fr';
   modelPath: string | null = null;
@@ -49,6 +50,14 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
 
   async getBottomInset(): Promise<number> {
     return 0;
+  }
+
+  async setDarkMode(enabled: boolean): Promise<void> {
+    this.darkMode = enabled;
+  }
+
+  async isDarkModeEnabled(): Promise<boolean> {
+    return this.darkMode;
   }
 
   subscribe(listener: Listener): () => void {

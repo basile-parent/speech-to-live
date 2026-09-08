@@ -157,6 +157,25 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  override fun setDarkMode(enabled: Boolean, promise: Promise) {
+    try {
+      persistDarkMode(enabled)
+      Log.i(TAG, "setDarkMode ok enabled=$enabled")
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      Log.e(TAG, "setDarkMode failed", error)
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun isDarkModeEnabled(promise: Promise) {
+    try {
+      promise.resolve(readPersistedDarkMode())
+    } catch (error: Throwable) {
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
   override fun addListener(eventName: String) = Unit
 
   override fun removeListeners(count: Double) = Unit
@@ -279,6 +298,13 @@ class NativeSpeechRecognitionModule(
     preferences().edit().putFloat(PREF_AUDIO_SENSITIVITY, sensitivity).apply()
   }
 
+  private fun readPersistedDarkMode(): Boolean =
+    preferences().getBoolean(PREF_DARK_MODE, DEFAULT_DARK_MODE)
+
+  private fun persistDarkMode(enabled: Boolean) {
+    preferences().edit().putBoolean(PREF_DARK_MODE, enabled).apply()
+  }
+
   private fun readBottomInsetDp(): Double {
     val density = reactApplicationContext.resources.displayMetrics.density.coerceAtLeast(0.1f)
     val activity = reactApplicationContext.currentActivity
@@ -315,5 +341,7 @@ class NativeSpeechRecognitionModule(
     private const val PREFS_NAME = "speech_to_live_settings"
     private const val PREF_SPEAKER_MODE = "speaker_mode"
     private const val PREF_AUDIO_SENSITIVITY = "audio_sensitivity"
+    private const val PREF_DARK_MODE = "dark_mode"
+    private const val DEFAULT_DARK_MODE = true
   }
 }

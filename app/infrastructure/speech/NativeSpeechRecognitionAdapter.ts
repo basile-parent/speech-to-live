@@ -78,6 +78,14 @@ export class NativeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return NativeSpeechRecognition.getBottomInset();
   }
 
+  setDarkMode(enabled: boolean): Promise<void> {
+    return NativeSpeechRecognition.setDarkMode(enabled);
+  }
+
+  isDarkModeEnabled(): Promise<boolean> {
+    return NativeSpeechRecognition.isDarkModeEnabled();
+  }
+
   subscribe(listener: TranscriptListener): () => void {
     const subscription = DeviceEventEmitter.addListener(
       EVENT_NAME,

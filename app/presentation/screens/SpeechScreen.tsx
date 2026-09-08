@@ -1,4 +1,4 @@
-import {useCallback, useRef} from 'react';
+import {useCallback, useMemo, useRef} from 'react';
 import {
   AccessibilityInfo,
   Button,
@@ -14,6 +14,7 @@ import {
   View,
   type ScrollViewInstance,
 } from 'react-native';
+import {getAppTheme} from '../../../shared/theme/appTheme';
 import {AudioWaveform} from '../components/AudioWaveform';
 import {useSpeechRecognition} from '../hooks/useSpeechRecognition';
 
@@ -40,6 +41,7 @@ async function requestMicrophonePermission(): Promise<boolean> {
 }
 
 type SpeechScreenProps = {
+  darkMode: boolean;
   speakerMode: boolean;
   audioSensitivity: number;
   bottomInset?: number;
@@ -47,11 +49,13 @@ type SpeechScreenProps = {
 };
 
 export function SpeechScreen({
+  darkMode,
   speakerMode,
   audioSensitivity,
   bottomInset = 0,
   onOpenSettings,
 }: SpeechScreenProps) {
+  const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
   const topInset =
     Platform.OS === 'android' ? (StatusBar.currentHeight ?? 12) : 12;
   const {
@@ -93,7 +97,9 @@ export function SpeechScreen({
       }
     } catch (err) {
       AccessibilityInfo.announceForAccessibility(
-        err instanceof Error ? err.message : 'Impossible d’arrêter la transcription',
+        err instanceof Error
+          ? err.message
+          : 'Impossible d’arrêter la transcription',
       );
     } finally {
       onOpenSettings();
@@ -130,10 +136,15 @@ export function SpeechScreen({
 
   return (
     <View
-      style={[styles.container, {paddingTop: topInset}]}
+      style={[
+        styles.container,
+        {paddingTop: topInset, backgroundColor: theme.background},
+      ]}
       accessibilityRole="summary">
       <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">
+        <Text
+          style={[styles.title, {color: theme.text}]}
+          accessibilityRole="header">
           Speech to Live
         </Text>
         <Pressable
@@ -144,12 +155,16 @@ export function SpeechScreen({
           accessibilityLabel="Ouvrir les paramètres"
           hitSlop={12}
           style={styles.settingsButton}>
-          <Text style={styles.settingsButtonText}>Paramètres</Text>
+          <Text style={[styles.settingsButtonText, {color: theme.accent}]}>
+            Paramètres
+          </Text>
         </Pressable>
       </View>
 
       {speakerMode ? (
-        <Text style={styles.modeBadge} accessibilityLabel="Mode locuteur actif">
+        <Text
+          style={[styles.modeBadge, {color: theme.accent}]}
+          accessibilityLabel="Mode locuteur actif">
           Mode locuteur
         </Text>
       ) : null}
@@ -171,15 +186,20 @@ export function SpeechScreen({
                 key={`${index}-${segment.speakerLabel ?? 'plain'}-${segment.text}`}
                 style={styles.segment}>
                 {speakerMode && segment.speakerLabel ? (
-                  <Text style={styles.speakerLabel}>{segment.speakerLabel}</Text>
+                  <Text style={[styles.speakerLabel, {color: theme.accent}]}>
+                    {segment.speakerLabel}
+                  </Text>
                 ) : null}
-                <Text style={styles.finalText}>{segment.text}</Text>
+                <Text style={[styles.finalText, {color: theme.text}]}>
+                  {segment.text}
+                </Text>
               </View>
             ))}
             {partialTranscript.length > 0 ? (
               <Text
                 style={[
                   styles.partialText,
+                  {color: theme.textMuted},
                   finalSegments.length > 0 ? styles.partialSpacing : null,
                 ]}>
                 {partialTranscript}
@@ -187,12 +207,16 @@ export function SpeechScreen({
             ) : null}
           </View>
         ) : (
-          <Text style={styles.placeholder}>—</Text>
+          <Text style={[styles.placeholder, {color: theme.textMuted}]}>
+            —
+          </Text>
         )}
       </ScrollView>
 
       {error ? (
-        <Text style={styles.error} accessibilityRole="alert">
+        <Text
+          style={[styles.error, {color: theme.error}]}
+          accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
@@ -200,6 +224,7 @@ export function SpeechScreen({
       <View style={styles.actions}>
         <Button
           title={isListening ? 'Arrêter' : 'Commencer'}
+          color={theme.accent}
           onPress={onPress}
           accessibilityLabel={
             isListening
@@ -222,7 +247,6 @@ export function SpeechScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
@@ -236,23 +260,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 28,
     fontWeight: '700',
-    color: '#111111',
   },
   settingsButton: {
-    paddingVertical: 6,
+    paddingVertical: 12,
     paddingHorizontal: 4,
+    justifyContent: 'center',
   },
   settingsButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1F6B3A',
+    lineHeight: 22,
   },
   modeBadge: {
     paddingHorizontal: 24,
     paddingBottom: 8,
     fontSize: 13,
     fontWeight: '600',
-    color: '#1F6B3A',
   },
   transcriptScroll: {
     flex: 1,
@@ -269,7 +292,6 @@ const styles = StyleSheet.create({
   speakerLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1F6B3A',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -277,13 +299,11 @@ const styles = StyleSheet.create({
   finalText: {
     fontSize: 22,
     lineHeight: 30,
-    color: '#111111',
     fontStyle: 'normal',
   },
   partialText: {
     fontSize: 22,
     lineHeight: 30,
-    color: '#888888',
     fontStyle: 'italic',
   },
   partialSpacing: {
@@ -292,14 +312,12 @@ const styles = StyleSheet.create({
   placeholder: {
     fontSize: 22,
     lineHeight: 30,
-    color: '#111111',
   },
   actions: {
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
   error: {
-    color: '#B00020',
     fontSize: 14,
     paddingHorizontal: 24,
     paddingBottom: 8,

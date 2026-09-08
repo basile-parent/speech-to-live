@@ -1,4 +1,6 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useMemo} from 'react';
+import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {getAppTheme, type AppThemeColors} from '../../../shared/theme/appTheme';
 
 type TranscriptionMode = 'simple' | 'speaker';
 
@@ -34,6 +36,8 @@ function sensitivityLabel(value: number): string {
 }
 
 type SettingsScreenProps = {
+  darkMode: boolean;
+  onDarkModeChange: (enabled: boolean) => void;
   speakerMode: boolean;
   onSpeakerModeChange: (enabled: boolean) => void;
   audioSensitivity: number;
@@ -44,6 +48,8 @@ type SettingsScreenProps = {
 };
 
 export function SettingsScreen({
+  darkMode,
+  onDarkModeChange,
   speakerMode,
   onSpeakerModeChange,
   audioSensitivity,
@@ -52,6 +58,7 @@ export function SettingsScreen({
   disabled = false,
   error = null,
 }: SettingsScreenProps) {
+  const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
   const selected: TranscriptionMode = speakerMode ? 'speaker' : 'simple';
   const selectedSensitivity = nearestSensitivityStep(audioSensitivity);
 
@@ -67,111 +74,164 @@ export function SettingsScreen({
   };
 
   return (
-    <View style={styles.container} accessibilityRole="summary">
-      <View style={styles.header}>
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          hitSlop={12}>
-          <Text style={styles.back}>Retour</Text>
-        </Pressable>
-        <Text style={styles.title} accessibilityRole="header">
-          Paramètres
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Mode de transcription</Text>
-        <Text style={styles.sectionHint}>
-          Choisissez comment afficher la transcription. Le mode locuteur
-          étiquette chaque segment finalisé (Locuteur 1, Locuteur 2, …).
-        </Text>
-
-        <View style={styles.options}>
-          <ModeOption
-            title="Mode simple"
-            description="Un seul flux de texte, sans séparation."
-            selected={selected === 'simple'}
-            disabled={disabled}
-            onPress={() => selectMode('simple')}
-          />
-          <ModeOption
-            title="Mode locuteur"
-            description="Chaque tour de parole finalisé est étiqueté."
-            selected={selected === 'speaker'}
-            disabled={disabled}
-            onPress={() => selectMode('speaker')}
-          />
-        </View>
-      </View>
-
-      <View style={[styles.section, styles.sectionSpacing]}>
-        <Text style={styles.sectionTitle}>Sensibilité du micro</Text>
-        <Text style={styles.sectionHint}>
-          Augmentez si vous devez parler trop fort pour être compris. Un
-          réglage trop élevé peut capter davantage de bruit.
-        </Text>
-
-        <View
-          style={styles.sensitivityRow}
-          accessibilityRole="adjustable"
-          accessibilityLabel={`Sensibilité ${sensitivityLabel(selectedSensitivity)}`}
-          accessibilityValue={{
-            min: 0,
-            max: SENSITIVITY_STEPS.length - 1,
-            now: SENSITIVITY_STEPS.indexOf(
-              selectedSensitivity as (typeof SENSITIVITY_STEPS)[number],
-            ),
-            text: sensitivityLabel(selectedSensitivity),
-          }}>
-          {SENSITIVITY_STEPS.map(step => {
-            const active = step <= selectedSensitivity + 0.001;
-            const selected = Math.abs(step - selectedSensitivity) < 0.001;
-            return (
-              <Pressable
-                key={step}
-                disabled={disabled}
-                onPress={() => onAudioSensitivityChange(step)}
-                accessibilityRole="button"
-                accessibilityState={{selected, disabled}}
-                accessibilityLabel={`Sensibilité ${sensitivityLabel(step)}`}
-                style={({pressed}) => [
-                  styles.sensitivityStep,
-                  active ? styles.sensitivityStepActive : null,
-                  selected ? styles.sensitivityStepSelected : null,
-                  pressed && !disabled ? styles.optionPressed : null,
-                  disabled ? styles.optionDisabled : null,
-                ]}
-              />
-            );
-          })}
-        </View>
-        <View style={styles.sensitivityLabels}>
-          <Text style={styles.sensitivityEdge}>Faible</Text>
-          <Text style={styles.sensitivityCurrent}>
-            {sensitivityLabel(selectedSensitivity)}
+    <View
+      style={[styles.container, {backgroundColor: theme.background}]}
+      accessibilityRole="summary">
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator>
+        <View style={styles.header}>
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+            hitSlop={12}
+            style={styles.backButton}>
+            <Text style={[styles.back, {color: theme.accent}]}>Retour</Text>
+          </Pressable>
+          <Text
+            style={[styles.title, {color: theme.text}]}
+            accessibilityRole="header">
+            Paramètres
           </Text>
-          <Text style={styles.sensitivityEdge}>Maximale</Text>
         </View>
-      </View>
 
-      {error ? (
-        <Text style={styles.error} accessibilityRole="alert">
-          {error}
-        </Text>
-      ) : null}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, {color: theme.text}]}>
+            Apparence
+          </Text>
+          <Text style={[styles.sectionHint, {color: theme.textSecondary}]}>
+            Le mode sombre est activé par défaut.
+          </Text>
+          <View style={styles.options}>
+            <ModeOption
+              theme={theme}
+              title="Mode sombre"
+              description="Fond sombre, texte clair."
+              selected={darkMode}
+              disabled={disabled}
+              onPress={() => onDarkModeChange(true)}
+            />
+            <ModeOption
+              theme={theme}
+              title="Mode clair"
+              description="Fond clair, texte sombre."
+              selected={!darkMode}
+              disabled={disabled}
+              onPress={() => onDarkModeChange(false)}
+            />
+          </View>
+        </View>
+
+        <View style={[styles.section, styles.sectionSpacing]}>
+          <Text style={[styles.sectionTitle, {color: theme.text}]}>
+            Mode de transcription
+          </Text>
+          <Text style={[styles.sectionHint, {color: theme.textSecondary}]}>
+            Choisissez comment afficher la transcription. Le mode locuteur
+            étiquette chaque segment finalisé (Locuteur 1, Locuteur 2, …).
+          </Text>
+
+          <View style={styles.options}>
+            <ModeOption
+              theme={theme}
+              title="Mode simple"
+              description="Un seul flux de texte, sans séparation."
+              selected={selected === 'simple'}
+              disabled={disabled}
+              onPress={() => selectMode('simple')}
+            />
+            <ModeOption
+              theme={theme}
+              title="Mode locuteur"
+              description="Chaque tour de parole finalisé est étiqueté."
+              selected={selected === 'speaker'}
+              disabled={disabled}
+              onPress={() => selectMode('speaker')}
+            />
+          </View>
+        </View>
+
+        <View style={[styles.section, styles.sectionSpacing]}>
+          <Text style={[styles.sectionTitle, {color: theme.text}]}>
+            Sensibilité du micro
+          </Text>
+          <Text style={[styles.sectionHint, {color: theme.textSecondary}]}>
+            Augmentez si vous devez parler trop fort pour être compris. Un
+            réglage trop élevé peut capter davantage de bruit.
+          </Text>
+
+          <View
+            style={styles.sensitivityRow}
+            accessibilityRole="adjustable"
+            accessibilityLabel={`Sensibilité ${sensitivityLabel(selectedSensitivity)}`}
+            accessibilityValue={{
+              min: 0,
+              max: SENSITIVITY_STEPS.length - 1,
+              now: SENSITIVITY_STEPS.indexOf(
+                selectedSensitivity as (typeof SENSITIVITY_STEPS)[number],
+              ),
+              text: sensitivityLabel(selectedSensitivity),
+            }}>
+            {SENSITIVITY_STEPS.map(step => {
+              const active = step <= selectedSensitivity + 0.001;
+              const selectedStep = Math.abs(step - selectedSensitivity) < 0.001;
+              return (
+                <Pressable
+                  key={step}
+                  disabled={disabled}
+                  onPress={() => onAudioSensitivityChange(step)}
+                  accessibilityRole="button"
+                  accessibilityState={{selected: selectedStep, disabled}}
+                  accessibilityLabel={`Sensibilité ${sensitivityLabel(step)}`}
+                  style={({pressed}) => [
+                    styles.sensitivityStep,
+                    {backgroundColor: theme.stepTrack},
+                    active ? {backgroundColor: theme.stepActive} : null,
+                    selectedStep ? {backgroundColor: theme.stepSelected} : null,
+                    pressed && !disabled ? styles.optionPressed : null,
+                    disabled ? styles.optionDisabled : null,
+                  ]}
+                />
+              );
+            })}
+          </View>
+          <View style={styles.sensitivityLabels}>
+            <Text style={[styles.sensitivityEdge, {color: theme.textMuted}]}>
+              Faible
+            </Text>
+            <Text style={[styles.sensitivityCurrent, {color: theme.accent}]}>
+              {sensitivityLabel(selectedSensitivity)}
+            </Text>
+            <Text style={[styles.sensitivityEdge, {color: theme.textMuted}]}>
+              Maximale
+            </Text>
+          </View>
+        </View>
+
+        {error ? (
+          <Text
+            style={[styles.error, {color: theme.error}]}
+            accessibilityRole="alert">
+            {error}
+          </Text>
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
 
 function ModeOption({
+  theme,
   title,
   description,
   selected,
   disabled,
   onPress,
 }: {
+  theme: AppThemeColors;
   title: string;
   description: string;
   selected: boolean;
@@ -187,17 +247,28 @@ function ModeOption({
       accessibilityLabel={title}
       style={({pressed}) => [
         styles.option,
-        selected ? styles.optionSelected : null,
+        {
+          borderColor: selected ? theme.borderSelected : theme.border,
+          backgroundColor: selected ? theme.surfaceSelected : theme.surface,
+        },
         pressed && !disabled ? styles.optionPressed : null,
         disabled ? styles.optionDisabled : null,
       ]}>
       <View style={styles.optionHeader}>
         <View
-          style={[styles.radio, selected ? styles.radioSelected : null]}
+          style={[
+            styles.radio,
+            {
+              borderColor: selected ? theme.accent : theme.textMuted,
+              backgroundColor: selected ? theme.accent : 'transparent',
+            },
+          ]}
         />
-        <Text style={styles.optionTitle}>{title}</Text>
+        <Text style={[styles.optionTitle, {color: theme.text}]}>{title}</Text>
       </View>
-      <Text style={styles.optionDescription}>{description}</Text>
+      <Text style={[styles.optionDescription, {color: theme.textSecondary}]}>
+        {description}
+      </Text>
     </Pressable>
   );
 }
@@ -205,22 +276,31 @@ function ModeOption({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 24,
+    paddingBottom: 32,
   },
   header: {
     paddingBottom: 24,
     gap: 8,
   },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
   back: {
     fontSize: 16,
-    color: '#1F6B3A',
     fontWeight: '600',
+    lineHeight: 22,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111111',
   },
   section: {
     gap: 12,
@@ -231,12 +311,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111111',
   },
   sectionHint: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#555555',
   },
   options: {
     marginTop: 8,
@@ -244,15 +322,9 @@ const styles = StyleSheet.create({
   },
   option: {
     borderWidth: 1.5,
-    borderColor: '#D0D0D0',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  optionSelected: {
-    borderColor: '#1F6B3A',
-    backgroundColor: '#F2F8F4',
   },
   optionPressed: {
     opacity: 0.85,
@@ -271,21 +343,14 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#888888',
-  },
-  radioSelected: {
-    borderColor: '#1F6B3A',
-    backgroundColor: '#1F6B3A',
   },
   optionTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#111111',
   },
   optionDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#666666',
     paddingLeft: 28,
   },
   sensitivityRow: {
@@ -298,13 +363,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 28,
     borderRadius: 6,
-    backgroundColor: '#E6E6E6',
-  },
-  sensitivityStepActive: {
-    backgroundColor: '#7FB392',
-  },
-  sensitivityStepSelected: {
-    backgroundColor: '#1F6B3A',
   },
   sensitivityLabels: {
     flexDirection: 'row',
@@ -313,16 +371,13 @@ const styles = StyleSheet.create({
   },
   sensitivityEdge: {
     fontSize: 13,
-    color: '#777777',
   },
   sensitivityCurrent: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F6B3A',
   },
   error: {
     marginTop: 16,
-    color: '#B00020',
     fontSize: 14,
     lineHeight: 20,
   },

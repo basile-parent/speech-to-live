@@ -13,5 +13,7 @@ export interface SpeechRecognitionPort {
   setAudioSensitivity(sensitivity: number): Promise<void>;
   getAudioSensitivity(): Promise<number>;
   getBottomInset(): Promise<number>;
+  setDarkMode(enabled: boolean): Promise<void>;
+  isDarkModeEnabled(): Promise<boolean>;
   subscribe(listener: TranscriptListener): () => void;
 }
