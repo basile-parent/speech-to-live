@@ -74,8 +74,14 @@ export class NativeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return NativeSpeechRecognition.getAudioSensitivity();
   }
 
-  getBottomInset(): Promise<number> {
-    return NativeSpeechRecognition.getBottomInset();
+  async getSystemInsets() {
+    const insets = await NativeSpeechRecognition.getSystemInsets();
+    return {
+      left: Number(insets.left) || 0,
+      right: Number(insets.right) || 0,
+      top: Number(insets.top) || 0,
+      bottom: Number(insets.bottom) || 0,
+    };
   }
 
   setDarkMode(enabled: boolean): Promise<void> {

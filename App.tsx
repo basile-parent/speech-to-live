@@ -1,9 +1,19 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Platform, StatusBar, StyleSheet, View} from 'react-native';
+import {
+  Dimensions,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {NativeSpeechRecognitionAdapter} from './app/infrastructure/speech/NativeSpeechRecognitionAdapter';
 import {SettingsScreen} from './app/presentation/screens/SettingsScreen';
 import {SpeechScreen} from './app/presentation/screens/SpeechScreen';
 import {getAppTheme} from './shared/theme/appTheme';
+import {
+  ZERO_SYSTEM_INSETS,
+  type SystemInsets,
+} from './shared/types';
 
 type AppScreen = 'speech' | 'settings';
 
@@ -18,7 +28,8 @@ function App() {
   const [audioSensitivity, setAudioSensitivity] = useState(
     DEFAULT_AUDIO_SENSITIVITY,
   );
-  const [bottomInset, setBottomInset] = useState(0);
+  const [systemInsets, setSystemInsets] =
+    useState<SystemInsets>(ZERO_SYSTEM_INSETS);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const topInset =
@@ -44,12 +55,23 @@ function App() {
       .catch(() => {
         setAudioSensitivity(DEFAULT_AUDIO_SENSITIVITY);
       });
-    settingsPort
-      .getBottomInset()
-      .then(setBottomInset)
-      .catch(() => {
-        setBottomInset(0);
-      });
+  }, []);
+
+  useEffect(() => {
+    const refreshInsets = () => {
+      settingsPort
+        .getSystemInsets()
+        .then(setSystemInsets)
+        .catch(() => {
+          setSystemInsets(ZERO_SYSTEM_INSETS);
+        });
+    };
+
+    refreshInsets();
+    const subscription = Dimensions.addEventListener('change', refreshInsets);
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const onSpeakerModeChange = useCallback(
@@ -140,7 +162,7 @@ function App() {
           darkMode={darkMode}
           speakerMode={speakerMode}
           audioSensitivity={audioSensitivity}
-          bottomInset={bottomInset}
+          systemInsets={systemInsets}
           onOpenSettings={() => {
             onOpenSettings().catch(() => undefined);
           }}
@@ -152,7 +174,9 @@ function App() {
             {
               backgroundColor: theme.background,
               paddingTop: topInset,
-              paddingBottom: bottomInset,
+              paddingLeft: systemInsets.left,
+              paddingRight: systemInsets.right,
+              paddingBottom: systemInsets.bottom,
             },
           ]}>
           <SettingsScreen

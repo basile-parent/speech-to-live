@@ -10,7 +10,12 @@ jest.mock('./specs/NativeSpeechRecognition', () => ({
     isSpeakerModeEnabled: jest.fn(async () => false),
     setAudioSensitivity: jest.fn(async () => undefined),
     getAudioSensitivity: jest.fn(async () => 0.5),
-    getBottomInset: jest.fn(async () => 0),
+    getSystemInsets: jest.fn(async () => ({
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+    })),
     setDarkMode: jest.fn(async () => undefined),
     isDarkModeEnabled: jest.fn(async () => true),
     addListener: jest.fn(),

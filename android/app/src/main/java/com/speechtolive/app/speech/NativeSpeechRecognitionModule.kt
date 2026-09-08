@@ -147,10 +147,10 @@ class NativeSpeechRecognitionModule(
     }
   }
 
-  override fun getBottomInset(promise: Promise) {
+  override fun getSystemInsets(promise: Promise) {
     UiThreadUtil.runOnUiThread {
       try {
-        promise.resolve(readBottomInsetDp())
+        promise.resolve(readSystemInsetsDp())
       } catch (error: Throwable) {
         promise.reject(ERROR_CODE, error.message, error)
       }
@@ -305,17 +305,22 @@ class NativeSpeechRecognitionModule(
     preferences().edit().putBoolean(PREF_DARK_MODE, enabled).apply()
   }
 
-  private fun readBottomInsetDp(): Double {
+  private fun readSystemInsetsDp(): WritableMap {
     val density = reactApplicationContext.resources.displayMetrics.density.coerceAtLeast(0.1f)
+    fun pxToDp(px: Int): Double = ceil(px / density).toDouble()
+
     val activity = reactApplicationContext.currentActivity
     val root: View? = activity?.window?.decorView ?: activity?.findViewById(android.R.id.content)
     if (root != null) {
       val insets = ViewCompat.getRootWindowInsets(root)
-      val bottomPx =
-        insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom
-          ?: 0
-      if (bottomPx > 0) {
-        return ceil(bottomPx / density).toDouble()
+      val nav = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())
+      if (nav != null && (nav.left > 0 || nav.right > 0 || nav.top > 0 || nav.bottom > 0)) {
+        return Arguments.createMap().apply {
+          putDouble("left", pxToDp(nav.left))
+          putDouble("right", pxToDp(nav.right))
+          putDouble("top", pxToDp(nav.top))
+          putDouble("bottom", pxToDp(nav.bottom))
+        }
       }
     }
 
@@ -326,11 +331,22 @@ class NativeSpeechRecognitionModule(
         "dimen",
         "android",
       )
-    if (resourceId > 0) {
-      val bottomPx = reactApplicationContext.resources.getDimensionPixelSize(resourceId)
-      return ceil(bottomPx / density).toDouble()
+    val fallbackDp =
+      if (resourceId > 0) {
+        pxToDp(reactApplicationContext.resources.getDimensionPixelSize(resourceId))
+      } else {
+        0.0
+      }
+    val landscape =
+      reactApplicationContext.resources.configuration.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    return Arguments.createMap().apply {
+      putDouble("left", 0.0)
+      putDouble("right", if (landscape) fallbackDp else 0.0)
+      putDouble("top", 0.0)
+      putDouble("bottom", if (landscape) 0.0 else fallbackDp)
     }
-    return 0.0
   }
 
   companion object {

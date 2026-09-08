@@ -8,10 +8,15 @@ const YELLOW_UNTIL = 0.82;
 type AudioWaveformProps = {
   level: number;
   active: boolean;
-  /** 0 = low sensitivity (cursor right), 1 = high (cursor left). */
+  /** 0 = low sensitivity (cursor right/top), 1 = high (cursor left/bottom). */
   sensitivity?: number;
-  /** Extra bottom padding for Android navigation controls (dp). */
-  bottomInset?: number;
+  /** horizontal = bottom bar; vertical = right-side bar (landscape). */
+  layout?: 'horizontal' | 'vertical';
+  /**
+   * Extra padding on the trailing edge for Android nav controls (dp):
+   * bottom in portrait, right in landscape.
+   */
+  edgeInset?: number;
 };
 
 function segmentColor(index: number, lit: boolean): string {
@@ -37,8 +42,10 @@ export function AudioWaveform({
   level,
   active,
   sensitivity = 0.5,
-  bottomInset = 0,
+  layout = 'horizontal',
+  edgeInset = 0,
 }: AudioWaveformProps) {
+  const isVertical = layout === 'vertical';
   const fillRatio = normalizeLevel(level, active);
   const litCount = Math.round(fillRatio * SEGMENT_COUNT);
   const cursorRatio = 0.8 - Math.min(0.8, Math.max(0, sensitivity * 0.75));
@@ -53,10 +60,16 @@ export function AudioWaveform({
 
   const percent = Math.round(fillRatio * 100);
   const sensitivityPercent = Math.round(sensitivity * 100);
+  const cursorPercent = Math.round(cursorRatio * 100);
 
   return (
     <View
-      style={[styles.container, {paddingBottom: 14 + bottomInset}]}
+      style={[
+        styles.container,
+        isVertical
+          ? [styles.containerVertical, {paddingRight: 14 + edgeInset}]
+          : [styles.containerHorizontal, {paddingBottom: 14 + edgeInset}],
+      ]}
       accessibilityRole="progressbar"
       accessibilityLabel={
         active
@@ -64,8 +77,8 @@ export function AudioWaveform({
           : `Niveau micro inactif, sensibilité ${sensitivityPercent} pourcent`
       }
       accessibilityValue={{min: 0, max: 100, now: percent}}>
-      <View style={styles.meterTrack}>
-        <View style={styles.segments}>
+      <View style={[styles.meterTrack, isVertical && styles.meterTrackVertical]}>
+        <View style={[styles.segments, isVertical && styles.segmentsVertical]}>
           {segments.map((segment, index) => (
             <View
               key={index}
@@ -77,11 +90,22 @@ export function AudioWaveform({
         <View
           pointerEvents="none"
           style={[
-            styles.cursor,
-            {left: `${Math.round(cursorRatio * 100)}%`},
+            isVertical ? styles.cursorVertical : styles.cursorHorizontal,
+            isVertical
+              ? {bottom: `${cursorPercent}%`}
+              : {left: `${cursorPercent}%`},
           ]}>
-          <View style={styles.cursorHead} />
-          <View style={styles.cursorLine} />
+          {isVertical ? (
+            <>
+              <View style={styles.cursorHeadRight} />
+              <View style={styles.cursorLineHorizontal} />
+            </>
+          ) : (
+            <>
+              <View style={styles.cursorHeadDown} />
+              <View style={styles.cursorLineVertical} />
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -91,14 +115,29 @@ export function AudioWaveform({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#0A0A0A',
+  },
+  containerHorizontal: {
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingTop: 14,
   },
+  containerVertical: {
+    alignSelf: 'stretch',
+    height: '100%',
+    paddingVertical: 16,
+    paddingLeft: 14,
+  },
   meterTrack: {
     height: 28,
-    justifyContent: 'center',
     position: 'relative',
+    justifyContent: 'center',
+  },
+  meterTrackVertical: {
+    height: '100%',
+    width: 28,
+    flex: 1,
+    alignSelf: 'center',
+    alignItems: 'center',
   },
   segments: {
     flexDirection: 'row',
@@ -106,11 +145,18 @@ const styles = StyleSheet.create({
     height: 22,
     gap: 2,
   },
+  segmentsVertical: {
+    flexDirection: 'column-reverse',
+    alignItems: 'stretch',
+    height: '100%',
+    width: 22,
+    flex: 1,
+  },
   segment: {
     flex: 1,
     borderRadius: 2,
   },
-  cursor: {
+  cursorHorizontal: {
     position: 'absolute',
     top: -6,
     bottom: -4,
@@ -118,7 +164,16 @@ const styles = StyleSheet.create({
     marginLeft: -7,
     alignItems: 'center',
   },
-  cursorHead: {
+  cursorVertical: {
+    position: 'absolute',
+    left: -6,
+    right: -4,
+    height: 14,
+    marginBottom: -7,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cursorHeadDown: {
     width: 0,
     height: 0,
     borderLeftWidth: 6,
@@ -128,11 +183,28 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderTopColor: '#FFFFFF',
   },
-  cursorLine: {
+  cursorHeadRight: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftWidth: 8,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: '#FFFFFF',
+  },
+  cursorLineVertical: {
     flex: 1,
     width: 2,
     backgroundColor: '#FFFFFF',
     borderRadius: 1,
     marginTop: 1,
+  },
+  cursorLineHorizontal: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1,
+    marginLeft: 1,
   },
 });

@@ -12,8 +12,13 @@ export interface Spec extends TurboModule {
   /** 0 = low gain, 1 = high gain. Can be changed while listening. */
   setAudioSensitivity(sensitivity: number): Promise<void>;
   getAudioSensitivity(): Promise<number>;
-  /** Bottom system inset in dp (nav bar / control buttons). */
-  getBottomInset(): Promise<number>;
+  /** Navigation-bar insets in dp (left/right/bottom/top; side shifts in landscape). */
+  getSystemInsets(): Promise<{
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  }>;
   setDarkMode(enabled: boolean): Promise<void>;
   isDarkModeEnabled(): Promise<boolean>;
   addListener(eventName: string): void;

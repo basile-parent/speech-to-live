@@ -12,10 +12,11 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type ScrollViewInstance,
 } from 'react-native';
-import type {TranscriptBlock} from '../../../shared/types';
+import type {SystemInsets, TranscriptBlock} from '../../../shared/types';
 import {getAppTheme} from '../../../shared/theme/appTheme';
 import {AudioWaveform} from '../components/AudioWaveform';
 import {
@@ -76,7 +77,7 @@ type SpeechScreenProps = {
   darkMode: boolean;
   speakerMode: boolean;
   audioSensitivity: number;
-  bottomInset?: number;
+  systemInsets?: SystemInsets;
   onOpenSettings: () => void;
 };
 
@@ -84,10 +85,12 @@ export function SpeechScreen({
   darkMode,
   speakerMode,
   audioSensitivity,
-  bottomInset = 0,
+  systemInsets = {left: 0, right: 0, top: 0, bottom: 0},
   onOpenSettings,
 }: SpeechScreenProps) {
   const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
+  const {width, height} = useWindowDimensions();
+  const isLandscape = width > height;
   const topInset =
     Platform.OS === 'android' ? (StatusBar.currentHeight ?? 12) : 12;
   const {
@@ -198,13 +201,139 @@ export function SpeechScreen({
   );
   const sessionMinHeight = viewportHeight > 0 ? viewportHeight : undefined;
 
-  return (
-    <View
-      style={[
-        styles.container,
-        {paddingTop: topInset, backgroundColor: theme.background},
-      ]}
-      accessibilityRole="summary">
+  const meter = (
+    <AudioWaveform
+      level={audioLevel}
+      active={isListening}
+      sensitivity={audioSensitivity}
+      layout={isLandscape ? 'vertical' : 'horizontal'}
+      edgeInset={isLandscape ? systemInsets.right : systemInsets.bottom}
+    />
+  );
+
+  const transcript = (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.transcriptScroll}
+      contentContainerStyle={styles.transcriptContent}
+      scrollEnabled={!isPinching}
+      onLayout={onTranscriptLayout}
+      onScroll={onTranscriptScroll}
+      onContentSizeChange={onTranscriptContentSizeChange}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchCancel}
+      scrollEventThrottle={16}
+      keyboardShouldPersistTaps="handled"
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={`Transcription: ${accessibilityTranscript || 'vide'}`}>
+      {hasContent ? (
+        <View>
+          {pages.map((page, pageIndex) => {
+            const isLastPage = pageIndex === pages.length - 1;
+            const showPartial = isLastPage && partialTranscript.length > 0;
+            const pageBody = (
+              <>
+                {page.segments.map(segment => (
+                  <View key={segment.id} style={styles.segment}>
+                    {speakerMode && segment.speakerLabel ? (
+                      <Text
+                        style={[
+                          styles.speakerLabel,
+                          {
+                            color: theme.accent,
+                            fontSize: speakerLabelSize,
+                            lineHeight: speakerLabelLineHeight,
+                          },
+                        ]}>
+                        {segment.speakerLabel}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.finalText,
+                        {
+                          color: theme.text,
+                          fontSize,
+                          lineHeight,
+                        },
+                      ]}>
+                      {segment.text}
+                    </Text>
+                  </View>
+                ))}
+                {showPartial ? (
+                  <Text
+                    style={[
+                      styles.partialText,
+                      {
+                        color: theme.textMuted,
+                        fontSize,
+                        lineHeight,
+                      },
+                      page.segments.length > 0 ? styles.partialSpacing : null,
+                    ]}>
+                    {partialTranscript}
+                  </Text>
+                ) : null}
+              </>
+            );
+
+            if (page.isFreshSession && isLastPage) {
+              return (
+                <View
+                  key={page.key}
+                  style={
+                    sessionMinHeight
+                      ? {minHeight: sessionMinHeight}
+                      : undefined
+                  }>
+                  {pageBody}
+                </View>
+              );
+            }
+
+            return <View key={page.key}>{pageBody}</View>;
+          })}
+        </View>
+      ) : (
+        <Text
+          style={[
+            styles.placeholder,
+            {color: theme.textMuted, fontSize, lineHeight},
+          ]}>
+          —
+        </Text>
+      )}
+    </ScrollView>
+  );
+
+  const errorBanner = error ? (
+    <Text
+      style={[styles.error, {color: theme.error}]}
+      accessibilityRole="alert">
+      {error}
+    </Text>
+  ) : null;
+
+  const actions = (
+    <View style={styles.actions}>
+      <Button
+        title={isListening ? 'Arrêter' : 'Commencer'}
+        color={theme.accent}
+        onPress={onPress}
+        accessibilityLabel={
+          isListening
+            ? 'Arrêter la transcription'
+            : 'Commencer la transcription'
+        }
+      />
+    </View>
+  );
+
+  const chrome = (
+    <>
       <View style={styles.header}>
         <Text
           style={[styles.title, {color: theme.text}]}
@@ -253,130 +382,43 @@ export function SpeechScreen({
           </Text>
         </Pressable>
       </View>
+    </>
+  );
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.transcriptScroll}
-        contentContainerStyle={styles.transcriptContent}
-        scrollEnabled={!isPinching}
-        onLayout={onTranscriptLayout}
-        onScroll={onTranscriptScroll}
-        onContentSizeChange={onTranscriptContentSizeChange}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchCancel}
-        scrollEventThrottle={16}
-        keyboardShouldPersistTaps="handled"
-        accessibilityLiveRegion="polite"
-        accessibilityLabel={`Transcription: ${accessibilityTranscript || 'vide'}`}>
-        {hasContent ? (
-          <View>
-            {pages.map((page, pageIndex) => {
-              const isLastPage = pageIndex === pages.length - 1;
-              const showPartial = isLastPage && partialTranscript.length > 0;
-              const pageBody = (
-                <>
-                  {page.segments.map(segment => (
-                    <View key={segment.id} style={styles.segment}>
-                      {speakerMode && segment.speakerLabel ? (
-                        <Text
-                          style={[
-                            styles.speakerLabel,
-                            {
-                              color: theme.accent,
-                              fontSize: speakerLabelSize,
-                              lineHeight: speakerLabelLineHeight,
-                            },
-                          ]}>
-                          {segment.speakerLabel}
-                        </Text>
-                      ) : null}
-                      <Text
-                        style={[
-                          styles.finalText,
-                          {
-                            color: theme.text,
-                            fontSize,
-                            lineHeight,
-                          },
-                        ]}>
-                        {segment.text}
-                      </Text>
-                    </View>
-                  ))}
-                  {showPartial ? (
-                    <Text
-                      style={[
-                        styles.partialText,
-                        {
-                          color: theme.textMuted,
-                          fontSize,
-                          lineHeight,
-                        },
-                        page.segments.length > 0 ? styles.partialSpacing : null,
-                      ]}>
-                      {partialTranscript}
-                    </Text>
-                  ) : null}
-                </>
-              );
-
-              if (page.isFreshSession && isLastPage) {
-                return (
-                  <View
-                    key={page.key}
-                    style={
-                      sessionMinHeight
-                        ? {minHeight: sessionMinHeight}
-                        : undefined
-                    }>
-                    {pageBody}
-                  </View>
-                );
-              }
-
-              return <View key={page.key}>{pageBody}</View>;
-            })}
+  return (
+    <View
+      style={[
+        styles.container,
+        isLandscape && styles.containerLandscape,
+        {
+          paddingTop: topInset,
+          paddingLeft: systemInsets.left,
+          // In landscape the vertical meter owns the right inset.
+          paddingRight: isLandscape ? 0 : systemInsets.right,
+          paddingBottom: isLandscape ? systemInsets.bottom : 0,
+          backgroundColor: theme.background,
+        },
+      ]}
+      accessibilityRole="summary">
+      {isLandscape ? (
+        <>
+          <View style={styles.landscapeMain}>
+            {chrome}
+            {transcript}
+            {errorBanner}
+            {actions}
           </View>
-        ) : (
-          <Text
-            style={[
-              styles.placeholder,
-              {color: theme.textMuted, fontSize, lineHeight},
-            ]}>
-            —
-          </Text>
-        )}
-      </ScrollView>
-
-      {error ? (
-        <Text
-          style={[styles.error, {color: theme.error}]}
-          accessibilityRole="alert">
-          {error}
-        </Text>
-      ) : null}
-
-      <View style={styles.actions}>
-        <Button
-          title={isListening ? 'Arrêter' : 'Commencer'}
-          color={theme.accent}
-          onPress={onPress}
-          accessibilityLabel={
-            isListening
-              ? 'Arrêter la transcription'
-              : 'Commencer la transcription'
-          }
-        />
-      </View>
-
-      <AudioWaveform
-        level={audioLevel}
-        active={isListening}
-        sensitivity={audioSensitivity}
-        bottomInset={bottomInset}
-      />
+          {meter}
+        </>
+      ) : (
+        <>
+          {chrome}
+          {transcript}
+          {errorBanner}
+          {actions}
+          {meter}
+        </>
+      )}
     </View>
   );
 }
@@ -384,6 +426,10 @@ export function SpeechScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  containerLandscape: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
   header: {
     flexDirection: 'row',
@@ -430,6 +476,11 @@ const styles = StyleSheet.create({
   trashIcon: {
     fontSize: 18,
     lineHeight: 22,
+  },
+  landscapeMain: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
   transcriptScroll: {
     flex: 1,

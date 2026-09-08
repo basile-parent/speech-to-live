@@ -48,8 +48,8 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return this.audioSensitivity;
   }
 
-  async getBottomInset(): Promise<number> {
-    return 0;
+  async getSystemInsets() {
+    return {left: 0, right: 0, top: 0, bottom: 0};
   }
 
   async setDarkMode(enabled: boolean): Promise<void> {
