@@ -168,6 +168,6 @@ class SpeechSession(
 
   companion object {
     private const val TAG = "SpeechToLive"
-    private const val AUDIO_LEVEL_EMIT_INTERVAL_MS = 200L
+    private const val AUDIO_LEVEL_EMIT_INTERVAL_MS = 50L
   }
 }

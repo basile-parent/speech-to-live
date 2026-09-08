@@ -4,10 +4,13 @@ import {
   Button,
   PermissionsAndroid,
   Platform,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import {AudioWaveform} from '../components/AudioWaveform';
 import {useSpeechRecognition} from '../hooks/useSpeechRecognition';
 
 async function requestMicrophonePermission(): Promise<boolean> {
@@ -29,12 +32,9 @@ async function requestMicrophonePermission(): Promise<boolean> {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 }
 
-function formatAudioLevel(level: number): string {
-  const percent = Math.min(100, Math.round(level * 400));
-  return `${percent}%`;
-}
-
 export function SpeechScreen() {
+  const topInset =
+    Platform.OS === 'android' ? (StatusBar.currentHeight ?? 12) : 12;
   const {
     isListening,
     partialTranscript,
@@ -69,40 +69,34 @@ export function SpeechScreen() {
   }, [isListening, start, stop]);
 
   return (
-    <View style={styles.container} accessibilityRole="summary">
+    <View
+      style={[styles.container, {paddingTop: topInset}]}
+      accessibilityRole="summary">
       <Text style={styles.title} accessibilityRole="header">
         Speech to Live
       </Text>
 
-      <View style={styles.section}>
+      <View style={styles.finalSection}>
         <Text style={styles.label}>Texte final</Text>
-        <Text
-          style={styles.finalText}
+        <ScrollView
+          style={styles.finalScroll}
+          contentContainerStyle={styles.finalScrollContent}
           accessibilityLiveRegion="polite"
           accessibilityLabel={`Texte final: ${finalTranscript || 'vide'}`}>
-          {finalTranscript || '—'}
-        </Text>
+          <Text style={styles.finalText}>{finalTranscript || '—'}</Text>
+        </ScrollView>
       </View>
 
-      <View style={styles.section}>
+      <View style={styles.partialSection}>
         <Text style={styles.label}>Texte partiel</Text>
         <Text
           style={styles.partialText}
+          numberOfLines={2}
           accessibilityLiveRegion="polite"
           accessibilityLabel={`Texte partiel: ${partialTranscript || 'vide'}`}>
           {partialTranscript || '—'}
         </Text>
       </View>
-
-      {isListening ? (
-        <Text
-          style={styles.level}
-          accessibilityLiveRegion="polite"
-          accessibilityLabel={`Niveau micro ${formatAudioLevel(audioLevel)}`}>
-          Niveau micro : {formatAudioLevel(audioLevel)}
-          {audioLevel < 0.01 ? ' (silence — activez le micro hôte de l’émulateur)' : ''}
-        </Text>
-      ) : null}
 
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
@@ -110,13 +104,19 @@ export function SpeechScreen() {
         </Text>
       ) : null}
 
-      <Button
-        title={isListening ? 'Arrêter' : 'Commencer'}
-        onPress={onPress}
-        accessibilityLabel={
-          isListening ? 'Arrêter la transcription' : 'Commencer la transcription'
-        }
-      />
+      <View style={styles.actions}>
+        <Button
+          title={isListening ? 'Arrêter' : 'Commencer'}
+          onPress={onPress}
+          accessibilityLabel={
+            isListening
+              ? 'Arrêter la transcription'
+              : 'Commencer la transcription'
+          }
+        />
+      </View>
+
+      <AudioWaveform level={audioLevel} active={isListening} />
     </View>
   );
 }
@@ -124,19 +124,27 @@ export function SpeechScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-    gap: 20,
     backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: 8,
     color: '#111111',
+    paddingHorizontal: 24,
+    paddingBottom: 12,
   },
-  section: {
+  finalSection: {
+    flex: 1,
+    paddingHorizontal: 24,
     gap: 8,
+    minHeight: 0,
+  },
+  finalScroll: {
+    flex: 1,
+  },
+  finalScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
   },
   label: {
     fontSize: 14,
@@ -148,21 +156,27 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 30,
     color: '#111111',
-    minHeight: 60,
+  },
+  partialSection: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    gap: 4,
   },
   partialText: {
-    fontSize: 18,
-    lineHeight: 26,
+    fontSize: 16,
+    lineHeight: 22,
     color: '#666666',
     fontStyle: 'italic',
-    minHeight: 48,
+    minHeight: 44,
   },
-  level: {
-    fontSize: 14,
-    color: '#333333',
+  actions: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
   error: {
     color: '#B00020',
     fontSize: 14,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
   },
 });
