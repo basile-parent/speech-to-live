@@ -5,6 +5,7 @@
   "scripts": {
     "android": "node ./scripts/run-android.js",
     "android:clean": "node ./scripts/clean-android-build.js",
+    "build:android": "node ./scripts/build-android-apk.js",
     "emulator": "node ./scripts/start-emulator.js",
     "ios": "react-native run-ios",
     "lint": "eslint .",
