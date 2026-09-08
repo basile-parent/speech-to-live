@@ -3,11 +3,15 @@ const path = require('path');
 const https = require('https');
 const {execFileSync} = require('child_process');
 
-const MODEL_NAME = 'sherpa-onnx-streaming-zipformer-fr-2023-04-14';
+// Kroko-ASR French streaming Zipformer (sherpa-onnx packaging).
+// See: https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models
+const MODEL_NAME = 'sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06';
 const ARCHIVE_URL =
   `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL_NAME}.tar.bz2`;
+
+const scriptsDir = __dirname;
 const assetsDir = path.join(
-  __dirname,
+  scriptsDir,
   '..',
   'android',
   'app',
@@ -16,12 +20,13 @@ const assetsDir = path.join(
   'assets',
   MODEL_NAME,
 );
-const archivePath = path.join(__dirname, `${MODEL_NAME}.tar.bz2`);
+const archiveFileName = `${MODEL_NAME}.tar.bz2`;
+const archivePath = path.join(scriptsDir, archiveFileName);
 
 const requiredFiles = [
-  'encoder-epoch-29-avg-9-with-averaged-model.int8.onnx',
-  'decoder-epoch-29-avg-9-with-averaged-model.onnx',
-  'joiner-epoch-29-avg-9-with-averaged-model.onnx',
+  'encoder.onnx',
+  'decoder.onnx',
+  'joiner.onnx',
   'tokens.txt',
 ];
 
@@ -65,14 +70,23 @@ async function main() {
     return;
   }
 
-  console.log(`Downloading ${ARCHIVE_URL}`);
-  await download(ARCHIVE_URL, archivePath);
+  if (!fs.existsSync(archivePath)) {
+    console.log(`Downloading ${ARCHIVE_URL}`);
+    await download(ARCHIVE_URL, archivePath);
+  } else {
+    console.log(`Using existing archive ${archivePath}`);
+  }
 
-  const extractRoot = path.join(__dirname, 'tmp-model');
+  // Use relative paths: MSYS/Git Bash tar fails on absolute Windows paths (C:...).
+  const extractRootName = 'tmp-model';
+  const extractRoot = path.join(scriptsDir, extractRootName);
   fs.rmSync(extractRoot, {recursive: true, force: true});
   fs.mkdirSync(extractRoot, {recursive: true});
 
-  execFileSync('tar', ['xjf', archivePath, '-C', extractRoot], {stdio: 'inherit'});
+  execFileSync('tar', ['xjf', archiveFileName, '-C', extractRootName], {
+    stdio: 'inherit',
+    cwd: scriptsDir,
+  });
 
   const extractedDir = path.join(extractRoot, MODEL_NAME);
   for (const fileName of requiredFiles) {
@@ -85,7 +99,7 @@ async function main() {
 
   fs.rmSync(extractRoot, {recursive: true, force: true});
   fs.rmSync(archivePath, {force: true});
-  console.log(`French streaming model installed in ${assetsDir}`);
+  console.log(`French Kroko streaming model installed in ${assetsDir}`);
 }
 
 main().catch(error => {

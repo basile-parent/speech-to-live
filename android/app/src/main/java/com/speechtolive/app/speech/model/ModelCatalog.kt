@@ -6,6 +6,7 @@ data class ModelDescriptor(
   val decoderFileName: String,
   val joinerFileName: String,
   val tokensFileName: String = "tokens.txt",
+  val modelType: String = "zipformer",
 ) {
   val encoderPath: String get() = "$directory/$encoderFileName"
   val decoderPath: String get() = "$directory/$decoderFileName"
@@ -22,10 +23,11 @@ object ModelCatalog {
     mapOf(
       "fr" to
         ModelDescriptor(
-          directory = "sherpa-onnx-streaming-zipformer-fr-2023-04-14",
-          encoderFileName = "encoder-epoch-29-avg-9-with-averaged-model.int8.onnx",
-          decoderFileName = "decoder-epoch-29-avg-9-with-averaged-model.onnx",
-          joinerFileName = "joiner-epoch-29-avg-9-with-averaged-model.onnx",
+          directory = "sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06",
+          encoderFileName = "encoder.onnx",
+          decoderFileName = "decoder.onnx",
+          joinerFileName = "joiner.onnx",
+          modelType = "zipformer2",
         ),
     )
 

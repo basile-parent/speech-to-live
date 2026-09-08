@@ -47,7 +47,7 @@ class SpeechRecognizer(
             tokens = model.tokensPath,
             numThreads = numThreads,
             provider = "cpu",
-            modelType = "zipformer",
+            modelType = model.modelType,
           ),
         endpointConfig = EndpointConfig(),
         enableEndpoint = true,

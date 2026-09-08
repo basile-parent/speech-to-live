@@ -185,6 +185,14 @@ class SpeechSession(
       decoderFileName = decoder.name,
       joinerFileName = joiner.name,
       tokensFileName = tokens.name,
+      modelType =
+        if (directory.name.contains("kroko", ignoreCase = true) ||
+          directory.name.contains("zipformer2", ignoreCase = true)
+        ) {
+          "zipformer2"
+        } else {
+          "zipformer"
+        },
     )
   }
 
