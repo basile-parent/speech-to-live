@@ -2,9 +2,42 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 type TranscriptionMode = 'simple' | 'speaker';
 
+const SENSITIVITY_STEPS = [0, 0.25, 0.5, 0.75, 1] as const;
+
+function nearestSensitivityStep(value: number): number {
+  let best: number = SENSITIVITY_STEPS[0];
+  let bestDistance = Math.abs(value - best);
+  for (const step of SENSITIVITY_STEPS) {
+    const distance = Math.abs(value - step);
+    if (distance < bestDistance) {
+      best = step;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function sensitivityLabel(value: number): string {
+  if (value <= 0.125) {
+    return 'Faible';
+  }
+  if (value <= 0.375) {
+    return 'Modérée';
+  }
+  if (value <= 0.625) {
+    return 'Normale';
+  }
+  if (value <= 0.875) {
+    return 'Élevée';
+  }
+  return 'Maximale';
+}
+
 type SettingsScreenProps = {
   speakerMode: boolean;
   onSpeakerModeChange: (enabled: boolean) => void;
+  audioSensitivity: number;
+  onAudioSensitivityChange: (sensitivity: number) => void;
   onBack: () => void;
   disabled?: boolean;
   error?: string | null;
@@ -13,11 +46,14 @@ type SettingsScreenProps = {
 export function SettingsScreen({
   speakerMode,
   onSpeakerModeChange,
+  audioSensitivity,
+  onAudioSensitivityChange,
   onBack,
   disabled = false,
   error = null,
 }: SettingsScreenProps) {
   const selected: TranscriptionMode = speakerMode ? 'speaker' : 'simple';
+  const selectedSensitivity = nearestSensitivityStep(audioSensitivity);
 
   const selectMode = (mode: TranscriptionMode) => {
     if (disabled) {
@@ -68,13 +104,63 @@ export function SettingsScreen({
             onPress={() => selectMode('speaker')}
           />
         </View>
-
-        {error ? (
-          <Text style={styles.error} accessibilityRole="alert">
-            {error}
-          </Text>
-        ) : null}
       </View>
+
+      <View style={[styles.section, styles.sectionSpacing]}>
+        <Text style={styles.sectionTitle}>Sensibilité du micro</Text>
+        <Text style={styles.sectionHint}>
+          Augmentez si vous devez parler trop fort pour être compris. Un
+          réglage trop élevé peut capter davantage de bruit.
+        </Text>
+
+        <View
+          style={styles.sensitivityRow}
+          accessibilityRole="adjustable"
+          accessibilityLabel={`Sensibilité ${sensitivityLabel(selectedSensitivity)}`}
+          accessibilityValue={{
+            min: 0,
+            max: SENSITIVITY_STEPS.length - 1,
+            now: SENSITIVITY_STEPS.indexOf(
+              selectedSensitivity as (typeof SENSITIVITY_STEPS)[number],
+            ),
+            text: sensitivityLabel(selectedSensitivity),
+          }}>
+          {SENSITIVITY_STEPS.map(step => {
+            const active = step <= selectedSensitivity + 0.001;
+            const selected = Math.abs(step - selectedSensitivity) < 0.001;
+            return (
+              <Pressable
+                key={step}
+                disabled={disabled}
+                onPress={() => onAudioSensitivityChange(step)}
+                accessibilityRole="button"
+                accessibilityState={{selected, disabled}}
+                accessibilityLabel={`Sensibilité ${sensitivityLabel(step)}`}
+                style={({pressed}) => [
+                  styles.sensitivityStep,
+                  active ? styles.sensitivityStepActive : null,
+                  selected ? styles.sensitivityStepSelected : null,
+                  pressed && !disabled ? styles.optionPressed : null,
+                  disabled ? styles.optionDisabled : null,
+                ]}
+              />
+            );
+          })}
+        </View>
+        <View style={styles.sensitivityLabels}>
+          <Text style={styles.sensitivityEdge}>Faible</Text>
+          <Text style={styles.sensitivityCurrent}>
+            {sensitivityLabel(selectedSensitivity)}
+          </Text>
+          <Text style={styles.sensitivityEdge}>Maximale</Text>
+        </View>
+      </View>
+
+      {error ? (
+        <Text style={styles.error} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -139,6 +225,9 @@ const styles = StyleSheet.create({
   section: {
     gap: 12,
   },
+  sectionSpacing: {
+    marginTop: 28,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -199,8 +288,40 @@ const styles = StyleSheet.create({
     color: '#666666',
     paddingLeft: 28,
   },
-  error: {
+  sensitivityRow: {
     marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sensitivityStep: {
+    flex: 1,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#E6E6E6',
+  },
+  sensitivityStepActive: {
+    backgroundColor: '#7FB392',
+  },
+  sensitivityStepSelected: {
+    backgroundColor: '#1F6B3A',
+  },
+  sensitivityLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sensitivityEdge: {
+    fontSize: 13,
+    color: '#777777',
+  },
+  sensitivityCurrent: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F6B3A',
+  },
+  error: {
+    marginTop: 16,
     color: '#B00020',
     fontSize: 14,
     lineHeight: 20,

@@ -6,6 +6,7 @@ type Listener = (event: TranscriptEvent) => void;
 export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
   private listening = false;
   private speakerMode = false;
+  private audioSensitivity = 0.5;
   private readonly listeners = new Set<Listener>();
   language = 'fr';
   modelPath: string | null = null;
@@ -36,6 +37,14 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
 
   async isSpeakerModeEnabled(): Promise<boolean> {
     return this.speakerMode;
+  }
+
+  async setAudioSensitivity(sensitivity: number): Promise<void> {
+    this.audioSensitivity = Math.min(1, Math.max(0, sensitivity));
+  }
+
+  async getAudioSensitivity(): Promise<number> {
+    return this.audioSensitivity;
   }
 
   subscribe(listener: Listener): () => void {

@@ -47,7 +47,7 @@ class AudioRecorder(
 
     val record =
       AudioRecord(
-        MediaRecorder.AudioSource.MIC,
+        MediaRecorder.AudioSource.VOICE_RECOGNITION,
         sampleRate,
         CHANNEL_CONFIG,
         AUDIO_FORMAT,

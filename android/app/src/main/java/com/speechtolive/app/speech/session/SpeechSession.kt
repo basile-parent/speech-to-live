@@ -11,6 +11,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.sqrt
 
 class SpeechSession(
@@ -22,6 +23,7 @@ class SpeechSession(
   private val decodeExecutor: ExecutorService = Executors.newSingleThreadExecutor(),
 ) {
   private val listening = AtomicBoolean(false)
+  private val audioGain = AtomicReference(DEFAULT_AUDIO_GAIN)
   private var currentModel: ModelDescriptor =
     ModelCatalog.requireLanguage(ModelCatalog.DEFAULT_LANGUAGE)
   private var modelLoaded = false
@@ -62,6 +64,12 @@ class SpeechSession(
 
   fun isSpeakerModeEnabled(): Boolean = speakerTracker?.isEnabled() == true
 
+  fun setAudioSensitivity(sensitivity: Float) {
+    audioGain.set(sensitivityToGain(sensitivity))
+  }
+
+  fun getAudioSensitivity(): Float = gainToSensitivity(audioGain.get())
+
   @Synchronized
   fun startListening() {
     if (!listening.compareAndSet(false, true)) {
@@ -75,10 +83,11 @@ class SpeechSession(
       }
       recognitionEngine.start()
       audioSource.start { samples, sampleRate ->
-        maybeEmitAudioLevel(samples)
+        val boosted = applyGain(samples, audioGain.get())
+        maybeEmitAudioLevel(boosted)
         decodeExecutor.execute {
           try {
-            recognitionEngine.acceptWaveform(samples, sampleRate)
+            recognitionEngine.acceptWaveform(boosted, sampleRate)
           } catch (error: Throwable) {
             listening.set(false)
             onError(error)
@@ -182,5 +191,37 @@ class SpeechSession(
   companion object {
     private const val TAG = "SpeechToLive"
     private const val AUDIO_LEVEL_EMIT_INTERVAL_MS = 50L
+    /** UI sensitivity 0..1 maps linearly onto this gain range. */
+    const val MIN_AUDIO_GAIN = 1.0f
+    const val MAX_AUDIO_GAIN = 4.0f
+    const val DEFAULT_AUDIO_SENSITIVITY = 0.5f
+    val DEFAULT_AUDIO_GAIN: Float = sensitivityToGain(DEFAULT_AUDIO_SENSITIVITY)
+
+    fun sensitivityToGain(sensitivity: Float): Float {
+      val clamped = sensitivity.coerceIn(0f, 1f)
+      return MIN_AUDIO_GAIN + (MAX_AUDIO_GAIN - MIN_AUDIO_GAIN) * clamped
+    }
+
+    fun gainToSensitivity(gain: Float): Float {
+      val clamped = gain.coerceIn(MIN_AUDIO_GAIN, MAX_AUDIO_GAIN)
+      return (clamped - MIN_AUDIO_GAIN) / (MAX_AUDIO_GAIN - MIN_AUDIO_GAIN)
+    }
+
+    private fun applyGain(samples: FloatArray, gain: Float): FloatArray {
+      if (gain == 1.0f) {
+        return samples
+      }
+      val boosted = FloatArray(samples.size)
+      for (index in samples.indices) {
+        val value = samples[index] * gain
+        boosted[index] =
+          when {
+            value > 1f -> 1f
+            value < -1f -> -1f
+            else -> value
+          }
+      }
+      return boosted
+    }
   }
 }

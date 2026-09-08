@@ -114,6 +114,34 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  override fun setAudioSensitivity(sensitivity: Double, promise: Promise) {
+    try {
+      val clamped = sensitivity.toFloat().coerceIn(0f, 1f)
+      synchronized(sessionLock) {
+        ensureSession().setAudioSensitivity(clamped)
+        persistAudioSensitivity(clamped)
+      }
+      Log.i(TAG, "setAudioSensitivity ok sensitivity=$clamped")
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      Log.e(TAG, "setAudioSensitivity failed", error)
+      emitError(error)
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun getAudioSensitivity(promise: Promise) {
+    try {
+      val sensitivity =
+        synchronized(sessionLock) {
+          session?.getAudioSensitivity() ?: readPersistedAudioSensitivity()
+        }
+      promise.resolve(sensitivity.toDouble())
+    } catch (error: Throwable) {
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
   override fun addListener(eventName: String) = Unit
 
   override fun removeListeners(count: Double) = Unit
@@ -158,7 +186,9 @@ class NativeSpeechRecognitionModule(
         },
         onAudioLevel = { level -> emitAudioLevel(level) },
         speakerTracker = tracker,
-      )
+      ).also {
+        it.setAudioSensitivity(readPersistedAudioSensitivity())
+      }
     session = created
     return created
   }
@@ -225,6 +255,15 @@ class NativeSpeechRecognitionModule(
     preferences().edit().putBoolean(PREF_SPEAKER_MODE, enabled).apply()
   }
 
+  private fun readPersistedAudioSensitivity(): Float =
+    preferences()
+      .getFloat(PREF_AUDIO_SENSITIVITY, SpeechSession.DEFAULT_AUDIO_SENSITIVITY)
+      .coerceIn(0f, 1f)
+
+  private fun persistAudioSensitivity(sensitivity: Float) {
+    preferences().edit().putFloat(PREF_AUDIO_SENSITIVITY, sensitivity).apply()
+  }
+
   companion object {
     const val NAME = "NativeSpeechRecognition"
     const val EVENT_NAME = "SpeechRecognitionTranscript"
@@ -232,5 +271,6 @@ class NativeSpeechRecognitionModule(
     private const val ERROR_CODE = "SPEECH_RECOGNITION_ERROR"
     private const val PREFS_NAME = "speech_to_live_settings"
     private const val PREF_SPEAKER_MODE = "speaker_mode"
+    private const val PREF_AUDIO_SENSITIVITY = "audio_sensitivity"
   }
 }

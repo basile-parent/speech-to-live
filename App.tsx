@@ -13,11 +13,15 @@ import {SpeechScreen} from './app/presentation/screens/SpeechScreen';
 type AppScreen = 'speech' | 'settings';
 
 const settingsPort = new NativeSpeechRecognitionAdapter();
+const DEFAULT_AUDIO_SENSITIVITY = 0.5;
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [screen, setScreen] = useState<AppScreen>('speech');
   const [speakerMode, setSpeakerMode] = useState(false);
+  const [audioSensitivity, setAudioSensitivity] = useState(
+    DEFAULT_AUDIO_SENSITIVITY,
+  );
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const topInset =
@@ -30,39 +34,65 @@ function App() {
       .catch(() => {
         setSpeakerMode(false);
       });
+    settingsPort
+      .getAudioSensitivity()
+      .then(setAudioSensitivity)
+      .catch(() => {
+        setAudioSensitivity(DEFAULT_AUDIO_SENSITIVITY);
+      });
   }, []);
 
-  const onSpeakerModeChange = useCallback(async (enabled: boolean) => {
-    if (settingsBusy) {
-      return;
-    }
-
-    setSettingsError(null);
-
-    try {
-      if (await settingsPort.isListening()) {
-        setSettingsError(
-          'Arrêtez la transcription avant de changer de mode.',
-        );
+  const onSpeakerModeChange = useCallback(
+    async (enabled: boolean) => {
+      if (settingsBusy) {
         return;
       }
 
-      // Optimistic UI so the choice feels immediate.
-      setSpeakerMode(enabled);
-      setSettingsBusy(true);
-      await settingsPort.setSpeakerMode(enabled);
-    } catch (error) {
-      // Revert if native call fails.
-      setSpeakerMode(!enabled);
-      setSettingsError(
-        error instanceof Error
-          ? error.message
-          : 'Impossible de changer de mode',
-      );
-    } finally {
-      setSettingsBusy(false);
-    }
-  }, [settingsBusy]);
+      setSettingsError(null);
+
+      try {
+        if (await settingsPort.isListening()) {
+          setSettingsError(
+            'Arrêtez la transcription avant de changer de mode.',
+          );
+          return;
+        }
+
+        setSpeakerMode(enabled);
+        setSettingsBusy(true);
+        await settingsPort.setSpeakerMode(enabled);
+      } catch (error) {
+        setSpeakerMode(!enabled);
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de changer de mode',
+        );
+      } finally {
+        setSettingsBusy(false);
+      }
+    },
+    [settingsBusy],
+  );
+
+  const onAudioSensitivityChange = useCallback(
+    async (sensitivity: number) => {
+      const previous = audioSensitivity;
+      setSettingsError(null);
+      setAudioSensitivity(sensitivity);
+      try {
+        await settingsPort.setAudioSensitivity(sensitivity);
+      } catch (error) {
+        setAudioSensitivity(previous);
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de changer la sensibilité',
+        );
+      }
+    },
+    [audioSensitivity],
+  );
 
   return (
     <View style={styles.container}>
@@ -78,6 +108,10 @@ function App() {
             speakerMode={speakerMode}
             onSpeakerModeChange={value => {
               onSpeakerModeChange(value).catch(() => undefined);
+            }}
+            audioSensitivity={audioSensitivity}
+            onAudioSensitivityChange={value => {
+              onAudioSensitivityChange(value).catch(() => undefined);
             }}
             onBack={() => {
               setSettingsError(null);
