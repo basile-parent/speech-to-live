@@ -51,7 +51,40 @@ test('useSpeechRecognition updates partial and final transcripts', async () => {
   expect(latest!.finalSegments).toEqual([
     {text: 'bonjour', speakerLabel: 'Locuteur 1'},
   ]);
+  expect(latest!.transcriptBlocks).toHaveLength(1);
   expect(latest!.partialTranscript).toBe('');
+});
+
+test('insertViewBreak keeps history and starts a fresh view', async () => {
+  const port = new FakeSpeechRecognitionAdapter();
+  let latest: HookState | undefined;
+
+  await ReactTestRenderer.act(() => {
+    ReactTestRenderer.create(
+      <HookProbe
+        port={port}
+        onState={state => {
+          latest = state;
+        }}
+      />,
+    );
+  });
+
+  await ReactTestRenderer.act(() => {
+    port.emit({type: 'final', text: 'bonjour'});
+  });
+
+  await ReactTestRenderer.act(() => {
+    latest!.insertViewBreak();
+  });
+
+  expect(latest!.finalSegments).toEqual([
+    {text: 'bonjour', speakerLabel: null},
+  ]);
+  expect(latest!.transcriptBlocks).toEqual([
+    expect.objectContaining({type: 'segment', text: 'bonjour'}),
+    expect.objectContaining({type: 'break'}),
+  ]);
 });
 
 test('useSpeechRecognition toggles speaker mode via port', async () => {

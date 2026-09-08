@@ -1,19 +1,25 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import type {SpeechRecognitionPort} from '../../domain/speech/SpeechRecognitionPort';
 import {NativeSpeechRecognitionAdapter} from '../../infrastructure/speech/NativeSpeechRecognitionAdapter';
-import type {FinalTranscriptSegment} from '../../../shared/types';
+import type {
+  FinalTranscriptSegment,
+  TranscriptBlock,
+} from '../../../shared/types';
 
 type UseSpeechRecognitionResult = {
   isListening: boolean;
   partialTranscript: string;
   finalTranscript: string;
   finalSegments: FinalTranscriptSegment[];
+  transcriptBlocks: TranscriptBlock[];
   audioLevel: number;
   error: string | null;
   speakerMode: boolean;
   setSpeakerMode: (enabled: boolean) => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  /** Starts a fresh view below history (does not delete past text). */
+  insertViewBreak: () => void;
   clearTranscript: () => void;
 };
 
@@ -28,14 +34,20 @@ export function useSpeechRecognition(
   const portRef = useRef<SpeechRecognitionPort>(
     options.port ?? new NativeSpeechRecognitionAdapter(),
   );
+  const blockIdRef = useRef(0);
   const [isListening, setIsListening] = useState(false);
   const [partialTranscript, setPartialTranscript] = useState('');
-  const [finalSegments, setFinalSegments] = useState<FinalTranscriptSegment[]>(
+  const [transcriptBlocks, setTranscriptBlocks] = useState<TranscriptBlock[]>(
     [],
   );
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [speakerMode, setSpeakerModeState] = useState(false);
+
+  const nextBlockId = useCallback((prefix: string) => {
+    blockIdRef.current += 1;
+    return `${prefix}-${blockIdRef.current}`;
+  }, []);
 
   useEffect(() => {
     const port = portRef.current;
@@ -45,9 +57,11 @@ export function useSpeechRecognition(
           setPartialTranscript(event.text);
           break;
         case 'final':
-          setFinalSegments(previous => [
+          setTranscriptBlocks(previous => [
             ...previous,
             {
+              type: 'segment',
+              id: nextBlockId('segment'),
               text: event.text,
               speakerLabel: event.speakerLabel ?? null,
             },
@@ -71,7 +85,7 @@ export function useSpeechRecognition(
       // already looks idle (e.g. navigating to settings mid-transcription).
       void port.stopListening().catch(() => undefined);
     };
-  }, []);
+  }, [nextBlockId]);
 
   useEffect(() => {
     if (!options.language) {
@@ -145,10 +159,32 @@ export function useSpeechRecognition(
     setSpeakerModeState(enabled);
   }, []);
 
+  const insertViewBreak = useCallback(() => {
+    setPartialTranscript('');
+    setTranscriptBlocks(previous => [
+      ...previous,
+      {
+        type: 'break',
+        id: nextBlockId('break'),
+      },
+    ]);
+  }, [nextBlockId]);
+
   const clearTranscript = useCallback(() => {
-    setFinalSegments([]);
+    setTranscriptBlocks([]);
     setPartialTranscript('');
   }, []);
+
+  const finalSegments = useMemo(
+    () =>
+      transcriptBlocks
+        .filter(
+          (block): block is Extract<TranscriptBlock, {type: 'segment'}> =>
+            block.type === 'segment',
+        )
+        .map(({text, speakerLabel}) => ({text, speakerLabel})),
+    [transcriptBlocks],
+  );
 
   const finalTranscript = useMemo(
     () =>
@@ -167,12 +203,14 @@ export function useSpeechRecognition(
     partialTranscript,
     finalTranscript,
     finalSegments,
+    transcriptBlocks,
     audioLevel,
     error,
     speakerMode,
     setSpeakerMode,
     start,
     stop,
+    insertViewBreak,
     clearTranscript,
   };
 }
