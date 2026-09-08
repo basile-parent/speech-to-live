@@ -18,6 +18,10 @@ import {
 import type {TranscriptBlock} from '../../../shared/types';
 import {getAppTheme} from '../../../shared/theme/appTheme';
 import {AudioWaveform} from '../components/AudioWaveform';
+import {
+  TRANSCRIPT_FONT_SIZE_DEFAULT,
+  usePinchFontSize,
+} from '../hooks/usePinchFontSize';
 import {useSpeechRecognition} from '../hooks/useSpeechRecognition';
 
 /** Distance from bottom (px) under which sticky auto-scroll stays active. */
@@ -101,6 +105,17 @@ export function SpeechScreen({
   const scrollRef = useRef<ScrollViewInstance>(null);
   const stickyToBottomRef = useRef(true);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const {
+    fontSize,
+    lineHeight,
+    isPinching,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel,
+  } = usePinchFontSize(TRANSCRIPT_FONT_SIZE_DEFAULT);
+  const speakerLabelSize = fontSize * (13 / 22);
+  const speakerLabelLineHeight = speakerLabelSize * 1.2;
 
   const onTranscriptScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -243,9 +258,14 @@ export function SpeechScreen({
         ref={scrollRef}
         style={styles.transcriptScroll}
         contentContainerStyle={styles.transcriptContent}
+        scrollEnabled={!isPinching}
         onLayout={onTranscriptLayout}
         onScroll={onTranscriptScroll}
         onContentSizeChange={onTranscriptContentSizeChange}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         accessibilityLiveRegion="polite"
@@ -261,11 +281,26 @@ export function SpeechScreen({
                     <View key={segment.id} style={styles.segment}>
                       {speakerMode && segment.speakerLabel ? (
                         <Text
-                          style={[styles.speakerLabel, {color: theme.accent}]}>
+                          style={[
+                            styles.speakerLabel,
+                            {
+                              color: theme.accent,
+                              fontSize: speakerLabelSize,
+                              lineHeight: speakerLabelLineHeight,
+                            },
+                          ]}>
                           {segment.speakerLabel}
                         </Text>
                       ) : null}
-                      <Text style={[styles.finalText, {color: theme.text}]}>
+                      <Text
+                        style={[
+                          styles.finalText,
+                          {
+                            color: theme.text,
+                            fontSize,
+                            lineHeight,
+                          },
+                        ]}>
                         {segment.text}
                       </Text>
                     </View>
@@ -274,7 +309,11 @@ export function SpeechScreen({
                     <Text
                       style={[
                         styles.partialText,
-                        {color: theme.textMuted},
+                        {
+                          color: theme.textMuted,
+                          fontSize,
+                          lineHeight,
+                        },
                         page.segments.length > 0 ? styles.partialSpacing : null,
                       ]}>
                       {partialTranscript}
@@ -301,7 +340,11 @@ export function SpeechScreen({
             })}
           </View>
         ) : (
-          <Text style={[styles.placeholder, {color: theme.textMuted}]}>
+          <Text
+            style={[
+              styles.placeholder,
+              {color: theme.textMuted, fontSize, lineHeight},
+            ]}>
             —
           </Text>
         )}
@@ -401,29 +444,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   speakerLabel: {
-    fontSize: 13,
     fontWeight: '700',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   finalText: {
-    fontSize: 22,
-    lineHeight: 30,
     fontStyle: 'normal',
   },
   partialText: {
-    fontSize: 22,
-    lineHeight: 30,
     fontStyle: 'italic',
   },
   partialSpacing: {
     marginTop: 4,
   },
-  placeholder: {
-    fontSize: 22,
-    lineHeight: 30,
-  },
+  placeholder: {},
   actions: {
     paddingHorizontal: 24,
     paddingVertical: 12,
