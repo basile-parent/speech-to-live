@@ -1,7 +1,9 @@
-import {useCallback} from 'react';
+import {useCallback, useRef} from 'react';
 import {
   AccessibilityInfo,
   Button,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -10,9 +12,13 @@ import {
   StyleSheet,
   Text,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 import {AudioWaveform} from '../components/AudioWaveform';
 import {useSpeechRecognition} from '../hooks/useSpeechRecognition';
+
+/** Distance from bottom (px) under which sticky auto-scroll stays active. */
+const STICKY_BOTTOM_THRESHOLD_PX = 56;
 
 async function requestMicrophonePermission(): Promise<boolean> {
   if (Platform.OS !== 'android') {
@@ -54,6 +60,27 @@ export function SpeechScreen({
     start,
     stop,
   } = useSpeechRecognition({language: 'fr'});
+
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const stickyToBottomRef = useRef(true);
+
+  const onTranscriptScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+      stickyToBottomRef.current =
+        distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
+    },
+    [],
+  );
+
+  const onTranscriptContentSizeChange = useCallback(() => {
+    if (!stickyToBottomRef.current) {
+      return;
+    }
+    scrollRef.current?.scrollToEnd({animated: false});
+  }, []);
 
   const onPress = useCallback(async () => {
     try {
@@ -108,8 +135,13 @@ export function SpeechScreen({
       ) : null}
 
       <ScrollView
+        ref={scrollRef}
         style={styles.transcriptScroll}
         contentContainerStyle={styles.transcriptContent}
+        onScroll={onTranscriptScroll}
+        onContentSizeChange={onTranscriptContentSizeChange}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
         accessibilityLiveRegion="polite"
         accessibilityLabel={`Transcription: ${accessibilityTranscript || 'vide'}`}>
         {hasContent ? (
