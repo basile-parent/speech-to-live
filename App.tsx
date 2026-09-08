@@ -94,13 +94,27 @@ function App() {
     [audioSensitivity],
   );
 
+  const onOpenSettings = useCallback(async () => {
+    setSettingsError(null);
+    try {
+      if (await settingsPort.isListening()) {
+        await settingsPort.stopListening();
+      }
+    } catch {
+      // Still open settings; SpeechScreen also stops on unmount.
+    }
+    setScreen('settings');
+  }, []);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       {screen === 'speech' ? (
         <SpeechScreen
           speakerMode={speakerMode}
-          onOpenSettings={() => setScreen('settings')}
+          onOpenSettings={() => {
+            onOpenSettings().catch(() => undefined);
+          }}
         />
       ) : (
         <View style={[styles.settingsScreen, {paddingTop: topInset}]}>

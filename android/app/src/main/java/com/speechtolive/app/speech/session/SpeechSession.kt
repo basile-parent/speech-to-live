@@ -40,8 +40,12 @@ class SpeechSession(
 
   @Synchronized
   fun setLanguage(language: String) {
+    val nextModel = ModelCatalog.requireLanguage(language)
+    if (modelLoaded && currentModel == nextModel) {
+      return
+    }
     ensureIdle("setLanguage")
-    currentModel = ModelCatalog.requireLanguage(language)
+    currentModel = nextModel
     recognitionEngine.loadModel(currentModel)
     modelLoaded = true
   }

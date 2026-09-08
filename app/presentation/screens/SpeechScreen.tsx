@@ -82,6 +82,20 @@ export function SpeechScreen({
     scrollRef.current?.scrollToEnd({animated: false});
   }, []);
 
+  const openSettings = useCallback(async () => {
+    try {
+      if (isListening) {
+        await stop();
+      }
+    } catch (err) {
+      AccessibilityInfo.announceForAccessibility(
+        err instanceof Error ? err.message : 'Impossible d’arrêter la transcription',
+      );
+    } finally {
+      onOpenSettings();
+    }
+  }, [isListening, onOpenSettings, stop]);
+
   const onPress = useCallback(async () => {
     try {
       if (isListening) {
@@ -119,7 +133,9 @@ export function SpeechScreen({
           Speech to Live
         </Text>
         <Pressable
-          onPress={onOpenSettings}
+          onPress={() => {
+            openSettings().catch(() => undefined);
+          }}
           accessibilityRole="button"
           accessibilityLabel="Ouvrir les paramètres"
           hitSlop={12}

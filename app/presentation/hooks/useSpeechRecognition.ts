@@ -65,7 +65,12 @@ export function useSpeechRecognition(
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      // Leaving the screen must release the native session even if JS state
+      // already looks idle (e.g. navigating to settings mid-transcription).
+      void port.stopListening().catch(() => undefined);
+    };
   }, []);
 
   useEffect(() => {
@@ -73,9 +78,33 @@ export function useSpeechRecognition(
       return;
     }
 
-    portRef.current.setLanguage(options.language).catch(err => {
-      setError(err instanceof Error ? err.message : String(err));
-    });
+    let cancelled = false;
+    const language = options.language;
+
+    void (async () => {
+      try {
+        // Avoid clobbering an active session; stop first if needed.
+        if (await portRef.current.isListening()) {
+          await portRef.current.stopListening();
+          if (!cancelled) {
+            setIsListening(false);
+            setAudioLevel(0);
+          }
+        }
+        if (cancelled) {
+          return;
+        }
+        await portRef.current.setLanguage(language);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [options.language]);
 
   useEffect(() => {
@@ -93,14 +122,21 @@ export function useSpeechRecognition(
     setError(null);
     setPartialTranscript('');
     setAudioLevel(0);
+    // Recover from a desynced native session (e.g. UI stopped but native did not).
+    if (await portRef.current.isListening()) {
+      await portRef.current.stopListening();
+    }
     await portRef.current.startListening();
     setIsListening(true);
   }, []);
 
   const stop = useCallback(async () => {
-    await portRef.current.stopListening();
-    setIsListening(false);
-    setAudioLevel(0);
+    try {
+      await portRef.current.stopListening();
+    } finally {
+      setIsListening(false);
+      setAudioLevel(0);
+    }
   }, []);
 
   const setSpeakerMode = useCallback(async (enabled: boolean) => {
