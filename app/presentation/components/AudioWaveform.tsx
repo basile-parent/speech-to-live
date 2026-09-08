@@ -10,6 +10,8 @@ type AudioWaveformProps = {
   active: boolean;
   /** 0 = low sensitivity (cursor right), 1 = high (cursor left). */
   sensitivity?: number;
+  /** Extra bottom padding for Android navigation controls (dp). */
+  bottomInset?: number;
 };
 
 function segmentColor(index: number, lit: boolean): string {
@@ -35,6 +37,7 @@ export function AudioWaveform({
   level,
   active,
   sensitivity = 0.5,
+  bottomInset = 0,
 }: AudioWaveformProps) {
   const fillRatio = normalizeLevel(level, active);
   const litCount = Math.round(fillRatio * SEGMENT_COUNT);
@@ -53,7 +56,7 @@ export function AudioWaveform({
 
   return (
     <View
-      style={styles.container}
+      style={[styles.container, {paddingBottom: 14 + bottomInset}]}
       accessibilityRole="progressbar"
       accessibilityLabel={
         active
@@ -87,11 +90,10 @@ export function AudioWaveform({
 
 const styles = StyleSheet.create({
   container: {
-    height: 72,
     backgroundColor: '#0A0A0A',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 14,
   },
   meterTrack: {
     height: 28,

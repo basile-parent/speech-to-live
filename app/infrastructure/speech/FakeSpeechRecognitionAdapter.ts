@@ -47,6 +47,10 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return this.audioSensitivity;
   }
 
+  async getBottomInset(): Promise<number> {
+    return 0;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {

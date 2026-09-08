@@ -12,6 +12,8 @@ export interface Spec extends TurboModule {
   /** 0 = low gain, 1 = high gain. Can be changed while listening. */
   setAudioSensitivity(sensitivity: number): Promise<void>;
   getAudioSensitivity(): Promise<number>;
+  /** Bottom system inset in dp (nav bar / control buttons). */
+  getBottomInset(): Promise<number>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }

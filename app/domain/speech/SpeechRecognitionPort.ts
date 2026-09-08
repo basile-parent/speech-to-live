@@ -12,5 +12,6 @@ export interface SpeechRecognitionPort {
   isSpeakerModeEnabled(): Promise<boolean>;
   setAudioSensitivity(sensitivity: number): Promise<void>;
   getAudioSensitivity(): Promise<number>;
+  getBottomInset(): Promise<number>;
   subscribe(listener: TranscriptListener): () => void;
 }

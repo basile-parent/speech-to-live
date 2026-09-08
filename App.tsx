@@ -22,6 +22,7 @@ function App() {
   const [audioSensitivity, setAudioSensitivity] = useState(
     DEFAULT_AUDIO_SENSITIVITY,
   );
+  const [bottomInset, setBottomInset] = useState(0);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const topInset =
@@ -39,6 +40,12 @@ function App() {
       .then(setAudioSensitivity)
       .catch(() => {
         setAudioSensitivity(DEFAULT_AUDIO_SENSITIVITY);
+      });
+    settingsPort
+      .getBottomInset()
+      .then(setBottomInset)
+      .catch(() => {
+        setBottomInset(0);
       });
   }, []);
 
@@ -113,12 +120,17 @@ function App() {
         <SpeechScreen
           speakerMode={speakerMode}
           audioSensitivity={audioSensitivity}
+          bottomInset={bottomInset}
           onOpenSettings={() => {
             onOpenSettings().catch(() => undefined);
           }}
         />
       ) : (
-        <View style={[styles.settingsScreen, {paddingTop: topInset}]}>
+        <View
+          style={[
+            styles.settingsScreen,
+            {paddingTop: topInset, paddingBottom: bottomInset},
+          ]}>
           <SettingsScreen
             speakerMode={speakerMode}
             onSpeakerModeChange={value => {

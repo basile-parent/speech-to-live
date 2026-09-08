@@ -42,12 +42,14 @@ async function requestMicrophonePermission(): Promise<boolean> {
 type SpeechScreenProps = {
   speakerMode: boolean;
   audioSensitivity: number;
+  bottomInset?: number;
   onOpenSettings: () => void;
 };
 
 export function SpeechScreen({
   speakerMode,
   audioSensitivity,
+  bottomInset = 0,
   onOpenSettings,
 }: SpeechScreenProps) {
   const topInset =
@@ -211,6 +213,7 @@ export function SpeechScreen({
         level={audioLevel}
         active={isListening}
         sensitivity={audioSensitivity}
+        bottomInset={bottomInset}
       />
     </View>
   );

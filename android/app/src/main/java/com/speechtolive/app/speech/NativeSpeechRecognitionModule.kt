@@ -2,9 +2,13 @@ package com.speechtolive.app.speech
 
 import android.content.Context
 import android.util.Log
+import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.speechtolive.app.NativeSpeechRecognitionSpec
@@ -13,6 +17,7 @@ import com.speechtolive.app.speech.recognition.RecognitionResult
 import com.speechtolive.app.speech.recognition.SpeechRecognizer
 import com.speechtolive.app.speech.session.SpeechSession
 import com.speechtolive.app.speech.speaker.SpeakerTracker
+import kotlin.math.ceil
 
 class NativeSpeechRecognitionModule(
   reactContext: ReactApplicationContext,
@@ -142,6 +147,16 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  override fun getBottomInset(promise: Promise) {
+    UiThreadUtil.runOnUiThread {
+      try {
+        promise.resolve(readBottomInsetDp())
+      } catch (error: Throwable) {
+        promise.reject(ERROR_CODE, error.message, error)
+      }
+    }
+  }
+
   override fun addListener(eventName: String) = Unit
 
   override fun removeListeners(count: Double) = Unit
@@ -262,6 +277,34 @@ class NativeSpeechRecognitionModule(
 
   private fun persistAudioSensitivity(sensitivity: Float) {
     preferences().edit().putFloat(PREF_AUDIO_SENSITIVITY, sensitivity).apply()
+  }
+
+  private fun readBottomInsetDp(): Double {
+    val density = reactApplicationContext.resources.displayMetrics.density.coerceAtLeast(0.1f)
+    val activity = reactApplicationContext.currentActivity
+    val root: View? = activity?.window?.decorView ?: activity?.findViewById(android.R.id.content)
+    if (root != null) {
+      val insets = ViewCompat.getRootWindowInsets(root)
+      val bottomPx =
+        insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom
+          ?: 0
+      if (bottomPx > 0) {
+        return ceil(bottomPx / density).toDouble()
+      }
+    }
+
+    // Fallback when insets are not ready yet (common just after launch).
+    val resourceId =
+      reactApplicationContext.resources.getIdentifier(
+        "navigation_bar_height",
+        "dimen",
+        "android",
+      )
+    if (resourceId > 0) {
+      val bottomPx = reactApplicationContext.resources.getDimensionPixelSize(resourceId)
+      return ceil(bottomPx / density).toDouble()
+    }
+    return 0.0
   }
 
   companion object {

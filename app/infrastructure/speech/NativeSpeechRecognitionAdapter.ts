@@ -74,6 +74,10 @@ export class NativeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return NativeSpeechRecognition.getAudioSensitivity();
   }
 
+  getBottomInset(): Promise<number> {
+    return NativeSpeechRecognition.getBottomInset();
+  }
+
   subscribe(listener: TranscriptListener): () => void {
     const subscription = DeviceEventEmitter.addListener(
       EVENT_NAME,
