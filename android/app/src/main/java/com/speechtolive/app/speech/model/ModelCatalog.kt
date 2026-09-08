@@ -15,6 +15,8 @@ data class ModelDescriptor(
 
 object ModelCatalog {
   const val DEFAULT_LANGUAGE = "fr"
+  const val SPEAKER_EMBEDDING_ASSET =
+    "speaker-embedding/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
 
   private val languageModels =
     mapOf(

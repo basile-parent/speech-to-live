@@ -1,15 +1,20 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import type {SpeechRecognitionPort} from '../../domain/speech/SpeechRecognitionPort';
 import {NativeSpeechRecognitionAdapter} from '../../infrastructure/speech/NativeSpeechRecognitionAdapter';
+import type {FinalTranscriptSegment} from '../../../shared/types';
 
 type UseSpeechRecognitionResult = {
   isListening: boolean;
   partialTranscript: string;
   finalTranscript: string;
+  finalSegments: FinalTranscriptSegment[];
   audioLevel: number;
   error: string | null;
+  speakerMode: boolean;
+  setSpeakerMode: (enabled: boolean) => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  clearTranscript: () => void;
 };
 
 type UseSpeechRecognitionOptions = {
@@ -25,9 +30,12 @@ export function useSpeechRecognition(
   );
   const [isListening, setIsListening] = useState(false);
   const [partialTranscript, setPartialTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
+  const [finalSegments, setFinalSegments] = useState<FinalTranscriptSegment[]>(
+    [],
+  );
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [speakerMode, setSpeakerModeState] = useState(false);
 
   useEffect(() => {
     const port = portRef.current;
@@ -37,9 +45,13 @@ export function useSpeechRecognition(
           setPartialTranscript(event.text);
           break;
         case 'final':
-          setFinalTranscript(previous =>
-            previous.length === 0 ? event.text : `${previous}\n${event.text}`,
-          );
+          setFinalSegments(previous => [
+            ...previous,
+            {
+              text: event.text,
+              speakerLabel: event.speakerLabel ?? null,
+            },
+          ]);
           setPartialTranscript('');
           break;
         case 'audioLevel':
@@ -66,6 +78,17 @@ export function useSpeechRecognition(
     });
   }, [options.language]);
 
+  useEffect(() => {
+    portRef.current
+      .isSpeakerModeEnabled()
+      .then(enabled => {
+        setSpeakerModeState(enabled);
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     setPartialTranscript('');
@@ -80,13 +103,40 @@ export function useSpeechRecognition(
     setAudioLevel(0);
   }, []);
 
+  const setSpeakerMode = useCallback(async (enabled: boolean) => {
+    setError(null);
+    await portRef.current.setSpeakerMode(enabled);
+    setSpeakerModeState(enabled);
+  }, []);
+
+  const clearTranscript = useCallback(() => {
+    setFinalSegments([]);
+    setPartialTranscript('');
+  }, []);
+
+  const finalTranscript = useMemo(
+    () =>
+      finalSegments
+        .map(segment =>
+          segment.speakerLabel
+            ? `${segment.speakerLabel}: ${segment.text}`
+            : segment.text,
+        )
+        .join('\n'),
+    [finalSegments],
+  );
+
   return {
     isListening,
     partialTranscript,
     finalTranscript,
+    finalSegments,
     audioLevel,
     error,
+    speakerMode,
+    setSpeakerMode,
     start,
     stop,
+    clearTranscript,
   };
 }

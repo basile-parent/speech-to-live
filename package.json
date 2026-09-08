@@ -11,7 +11,8 @@
     "start": "react-native start",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "download:model:fr": "node ./scripts/download-french-model.js"
+    "download:model:fr": "node ./scripts/download-french-model.js",
+    "download:model:speaker": "node ./scripts/download-speaker-model.js"
   },
   "dependencies": {
     "react": "19.2.3",

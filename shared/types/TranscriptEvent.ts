@@ -1,3 +1,8 @@
+export type FinalTranscriptSegment = {
+  text: string;
+  speakerLabel?: string | null;
+};
+
 export type TranscriptEvent =
   | {
       type: 'partial';
@@ -6,6 +11,7 @@ export type TranscriptEvent =
   | {
       type: 'final';
       text: string;
+      speakerLabel?: string | null;
     }
   | {
       type: 'audioLevel';

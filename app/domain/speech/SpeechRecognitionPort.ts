@@ -8,5 +8,7 @@ export interface SpeechRecognitionPort {
   isListening(): Promise<boolean>;
   setLanguage(language: string): Promise<void>;
   setModel(path: string): Promise<void>;
+  setSpeakerMode(enabled: boolean): Promise<void>;
+  isSpeakerModeEnabled(): Promise<boolean>;
   subscribe(listener: TranscriptListener): () => void;
 }

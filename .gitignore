@@ -74,8 +74,9 @@ yarn-error.log
 !.yarn/sdks
 !.yarn/versions
 
-# Offline ASR models (download via npm run download:model:fr)
+# Offline ASR / speaker models (download via npm scripts)
 android/app/src/main/assets/sherpa-onnx-*/
+android/app/src/main/assets/speaker-embedding/
 scripts/*.tar.bz2
 scripts/tmp-model/
 

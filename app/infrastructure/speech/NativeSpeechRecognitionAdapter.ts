@@ -11,6 +11,7 @@ const EVENT_NAME = 'SpeechRecognitionTranscript';
 type NativeTranscriptPayload = {
   type: 'partial' | 'final' | 'audioLevel' | 'error';
   text?: string;
+  speakerLabel?: string | null;
   message?: string;
   level?: number;
 };
@@ -20,7 +21,11 @@ function toTranscriptEvent(payload: NativeTranscriptPayload): TranscriptEvent {
     case 'partial':
       return {type: 'partial', text: payload.text ?? ''};
     case 'final':
-      return {type: 'final', text: payload.text ?? ''};
+      return {
+        type: 'final',
+        text: payload.text ?? '',
+        speakerLabel: payload.speakerLabel ?? null,
+      };
     case 'audioLevel':
       return {type: 'audioLevel', level: payload.level ?? 0};
     case 'error':
@@ -51,6 +56,14 @@ export class NativeSpeechRecognitionAdapter implements SpeechRecognitionPort {
 
   setModel(path: string): Promise<void> {
     return NativeSpeechRecognition.setModel(path);
+  }
+
+  setSpeakerMode(enabled: boolean): Promise<void> {
+    return NativeSpeechRecognition.setSpeakerMode(enabled);
+  }
+
+  isSpeakerModeEnabled(): Promise<boolean> {
+    return NativeSpeechRecognition.isSpeakerModeEnabled();
   }
 
   subscribe(listener: TranscriptListener): () => void {

@@ -6,6 +6,7 @@ import com.speechtolive.app.speech.audio.PcmAudioSource
 import com.speechtolive.app.speech.model.ModelCatalog
 import com.speechtolive.app.speech.model.ModelDescriptor
 import com.speechtolive.app.speech.recognition.SpeechRecognitionEngine
+import com.speechtolive.app.speech.speaker.SpeakerTracker
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -17,6 +18,7 @@ class SpeechSession(
   private val recognitionEngine: SpeechRecognitionEngine,
   private val onError: (Throwable) -> Unit,
   private val onAudioLevel: ((Float) -> Unit)? = null,
+  private val speakerTracker: SpeakerTracker? = null,
   private val decodeExecutor: ExecutorService = Executors.newSingleThreadExecutor(),
 ) {
   private val listening = AtomicBoolean(false)
@@ -49,6 +51,16 @@ class SpeechSession(
     recognitionEngine.loadModel(currentModel)
     modelLoaded = true
   }
+
+  @Synchronized
+  fun setSpeakerMode(enabled: Boolean) {
+    ensureIdle("setSpeakerMode")
+    // Only flip the preference here. The embedding model is loaded lazily
+    // when listening starts, so changing mode stays instant and reliable.
+    speakerTracker?.setEnabled(enabled)
+  }
+
+  fun isSpeakerModeEnabled(): Boolean = speakerTracker?.isEnabled() == true
 
   @Synchronized
   fun startListening() {
@@ -99,6 +111,7 @@ class SpeechSession(
     stopListening()
     audioSource.release()
     recognitionEngine.release()
+    speakerTracker?.release()
     modelLoaded = false
     decodeExecutor.shutdownNow()
   }

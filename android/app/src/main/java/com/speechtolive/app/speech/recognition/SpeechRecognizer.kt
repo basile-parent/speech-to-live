@@ -9,18 +9,21 @@ import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import com.speechtolive.app.speech.model.ModelDescriptor
+import com.speechtolive.app.speech.speaker.SpeakerTracker
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 class SpeechRecognizer(
   private val assetManager: AssetManager,
   private val resultListener: RecognitionResultListener,
+  private val speakerTracker: SpeakerTracker? = null,
   private val numThreads: Int = DEFAULT_NUM_THREADS,
 ) : SpeechRecognitionEngine {
   private val running = AtomicBoolean(false)
   private var recognizer: OnlineRecognizer? = null
   private var stream: OnlineStream? = null
   private var loadedModel: ModelDescriptor? = null
+  private val utteranceSamples = ArrayList<Float>(DEFAULT_UTTERANCE_CAPACITY)
 
   override fun loadModel(model: ModelDescriptor) {
     if (running.get()) {
@@ -68,6 +71,11 @@ class SpeechRecognizer(
       throw IllegalStateException("SpeechRecognizer is already running")
     }
 
+    clearUtteranceBuffer()
+    if (speakerTracker?.isEnabled() == true) {
+      speakerTracker.ensureLoaded()
+      speakerTracker.resetSession()
+    }
     stream = activeRecognizer.createStream()
   }
 
@@ -83,6 +91,10 @@ class SpeechRecognizer(
       stream
         ?: throw IllegalStateException("SpeechRecognizer stream is not started")
 
+    if (speakerTracker?.isEnabled() == true) {
+      appendUtteranceSamples(samples)
+    }
+
     activeStream.acceptWaveform(samples, sampleRate = sampleRate)
 
     while (activeRecognizer.isReady(activeStream)) {
@@ -94,7 +106,9 @@ class SpeechRecognizer(
 
     if (endpoint) {
       if (text.isNotEmpty()) {
-        resultListener.onRecognitionResult(RecognitionResult.Final(text))
+        emitFinal(text, sampleRate)
+      } else {
+        clearUtteranceBuffer()
       }
       activeRecognizer.reset(activeStream)
     } else if (text.isNotEmpty()) {
@@ -112,9 +126,13 @@ class SpeechRecognizer(
     if (activeRecognizer != null && activeStream != null) {
       val text = activeRecognizer.getResult(activeStream).text.trim()
       if (text.isNotEmpty()) {
-        resultListener.onRecognitionResult(RecognitionResult.Final(text))
+        emitFinal(text, DEFAULT_SAMPLE_RATE)
+      } else {
+        clearUtteranceBuffer()
       }
       activeStream.release()
+    } else {
+      clearUtteranceBuffer()
     }
     stream = null
   }
@@ -126,10 +144,37 @@ class SpeechRecognizer(
 
   override fun isRunning(): Boolean = running.get()
 
+  private fun emitFinal(text: String, sampleRate: Int) {
+    val speakerLabel =
+      if (speakerTracker?.isEnabled() == true) {
+        try {
+          speakerTracker.identify(utteranceSamples.toFloatArray(), sampleRate)
+        } catch (_: Throwable) {
+          null
+        }
+      } else {
+        null
+      }
+    clearUtteranceBuffer()
+    resultListener.onRecognitionResult(RecognitionResult.Final(text, speakerLabel))
+  }
+
+  private fun appendUtteranceSamples(samples: FloatArray) {
+    utteranceSamples.ensureCapacity(utteranceSamples.size + samples.size)
+    for (sample in samples) {
+      utteranceSamples.add(sample)
+    }
+  }
+
+  private fun clearUtteranceBuffer() {
+    utteranceSamples.clear()
+  }
+
   private fun releaseRecognizer() {
     recognizer?.release()
     recognizer = null
     loadedModel = null
+    clearUtteranceBuffer()
   }
 
   private fun resolveAssetManager(model: ModelDescriptor): AssetManager? {
@@ -175,5 +220,6 @@ class SpeechRecognizer(
   companion object {
     const val DEFAULT_SAMPLE_RATE = 16_000
     private const val DEFAULT_NUM_THREADS = 2
+    private const val DEFAULT_UTTERANCE_CAPACITY = 16_000
   }
 }

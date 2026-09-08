@@ -1,5 +1,6 @@
 package com.speechtolive.app.speech
 
+import android.content.Context
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -11,12 +12,14 @@ import com.speechtolive.app.speech.audio.AudioRecorder
 import com.speechtolive.app.speech.recognition.RecognitionResult
 import com.speechtolive.app.speech.recognition.SpeechRecognizer
 import com.speechtolive.app.speech.session.SpeechSession
+import com.speechtolive.app.speech.speaker.SpeakerTracker
 
 class NativeSpeechRecognitionModule(
   reactContext: ReactApplicationContext,
 ) : NativeSpeechRecognitionSpec(reactContext) {
   private val sessionLock = Any()
   private var session: SpeechSession? = null
+  private var speakerTracker: SpeakerTracker? = null
 
   override fun getName(): String = NAME
 
@@ -84,6 +87,33 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  override fun setSpeakerMode(enabled: Boolean, promise: Promise) {
+    try {
+      synchronized(sessionLock) {
+        ensureSession().setSpeakerMode(enabled)
+        persistSpeakerMode(enabled)
+      }
+      Log.i(TAG, "setSpeakerMode ok enabled=$enabled")
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      Log.e(TAG, "setSpeakerMode failed", error)
+      emitError(error)
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun isSpeakerModeEnabled(promise: Promise) {
+    try {
+      val enabled =
+        synchronized(sessionLock) {
+          session?.isSpeakerModeEnabled() ?: readPersistedSpeakerMode()
+        }
+      promise.resolve(enabled)
+    } catch (error: Throwable) {
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
   override fun addListener(eventName: String) = Unit
 
   override fun removeListeners(count: Double) = Unit
@@ -92,6 +122,7 @@ class NativeSpeechRecognitionModule(
     synchronized(sessionLock) {
       session?.release()
       session = null
+      speakerTracker = null
     }
     super.invalidate()
   }
@@ -101,7 +132,12 @@ class NativeSpeechRecognitionModule(
       return it
     }
 
-    val audioRecorder = AudioRecorder(reactApplicationContext)
+    val tracker =
+      SpeakerTracker(assetManager = reactApplicationContext.assets).also {
+        it.setEnabled(readPersistedSpeakerMode())
+        speakerTracker = it
+      }
+
     val recognizer =
       SpeechRecognizer(
         assetManager = reactApplicationContext.assets,
@@ -109,17 +145,19 @@ class NativeSpeechRecognitionModule(
           Log.i(TAG, "recognition result=$result")
           emitResult(result)
         },
+        speakerTracker = tracker,
       )
 
     val created =
       SpeechSession(
-        audioSource = audioRecorder,
+        audioSource = AudioRecorder(reactApplicationContext),
         recognitionEngine = recognizer,
         onError = { error ->
           Log.e(TAG, "session error", error)
           emitError(error)
         },
         onAudioLevel = { level -> emitAudioLevel(level) },
+        speakerTracker = tracker,
       )
     session = created
     return created
@@ -137,6 +175,7 @@ class NativeSpeechRecognitionModule(
           Arguments.createMap().apply {
             putString("type", "final")
             putString("text", result.text)
+            result.speakerLabel?.let { putString("speakerLabel", it) }
           }
       }
     sendEvent(payload)
@@ -176,10 +215,22 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  private fun preferences() =
+    reactApplicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+  private fun readPersistedSpeakerMode(): Boolean =
+    preferences().getBoolean(PREF_SPEAKER_MODE, false)
+
+  private fun persistSpeakerMode(enabled: Boolean) {
+    preferences().edit().putBoolean(PREF_SPEAKER_MODE, enabled).apply()
+  }
+
   companion object {
     const val NAME = "NativeSpeechRecognition"
     const val EVENT_NAME = "SpeechRecognitionTranscript"
     private const val TAG = "SpeechToLive"
     private const val ERROR_CODE = "SPEECH_RECOGNITION_ERROR"
+    private const val PREFS_NAME = "speech_to_live_settings"
+    private const val PREF_SPEAKER_MODE = "speaker_mode"
   }
 }

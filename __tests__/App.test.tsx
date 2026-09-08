@@ -10,10 +10,14 @@ jest.mock('../app/presentation/hooks/useSpeechRecognition', () => ({
     isListening: false,
     partialTranscript: '',
     finalTranscript: '',
+    finalSegments: [],
     audioLevel: 0,
     error: null,
+    speakerMode: false,
+    setSpeakerMode: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
+    clearTranscript: jest.fn(),
   }),
 }));
 

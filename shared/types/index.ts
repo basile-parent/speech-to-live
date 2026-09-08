@@ -1,1 +1,1 @@
-export type {TranscriptEvent} from './TranscriptEvent';
+export type {FinalTranscriptSegment, TranscriptEvent} from './TranscriptEvent';

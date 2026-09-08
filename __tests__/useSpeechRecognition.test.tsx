@@ -45,8 +45,34 @@ test('useSpeechRecognition updates partial and final transcripts', async () => {
   expect(latest!.partialTranscript).toBe('bonjour');
 
   await ReactTestRenderer.act(() => {
-    port.emit({type: 'final', text: 'bonjour'});
+    port.emit({type: 'final', text: 'bonjour', speakerLabel: 'Locuteur 1'});
   });
-  expect(latest!.finalTranscript).toBe('bonjour');
+  expect(latest!.finalTranscript).toBe('Locuteur 1: bonjour');
+  expect(latest!.finalSegments).toEqual([
+    {text: 'bonjour', speakerLabel: 'Locuteur 1'},
+  ]);
   expect(latest!.partialTranscript).toBe('');
+});
+
+test('useSpeechRecognition toggles speaker mode via port', async () => {
+  const port = new FakeSpeechRecognitionAdapter();
+  let latest: HookState | undefined;
+
+  await ReactTestRenderer.act(() => {
+    ReactTestRenderer.create(
+      <HookProbe
+        port={port}
+        onState={state => {
+          latest = state;
+        }}
+      />,
+    );
+  });
+
+  await ReactTestRenderer.act(async () => {
+    await latest!.setSpeakerMode(true);
+  });
+
+  expect(latest!.speakerMode).toBe(true);
+  expect(await port.isSpeakerModeEnabled()).toBe(true);
 });
