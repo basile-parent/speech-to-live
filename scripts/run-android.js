@@ -13,7 +13,6 @@ const androidHome =
   path.join(home, 'AppData', 'Local', 'Android', 'Sdk');
 const adbPath = path.join(androidHome, 'platform-tools', 'adb.exe');
 const emulatorPath = path.join(androidHome, 'emulator', 'emulator.exe');
-const gradlewPath = path.join(projectRoot, 'android', 'gradlew.bat');
 const preferredAvd = process.env.ANDROID_AVD || 'SpeechToLive_API36';
 const bootTimeoutMs = Number(process.env.ANDROID_BOOT_TIMEOUT_MS || 300000);
 const appId = 'com.speechtolive.app';
@@ -33,6 +32,28 @@ const env = {
     process.env.PATH || '',
   ].join(path.delimiter),
 };
+
+function parseArgs(argv) {
+  const args = [...argv];
+  let deviceId = null;
+  const passthrough = [];
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--device' || arg === '--deviceId' || arg === '-d') {
+      deviceId = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--device=') || arg.startsWith('--deviceId=')) {
+      deviceId = arg.split('=').slice(1).join('=');
+      continue;
+    }
+    passthrough.push(arg);
+  }
+
+  return {deviceId, passthrough};
+}
 
 function run(command, args, options = {}) {
   const useShell = options.shell ?? true;
@@ -80,6 +101,30 @@ function listDevices() {
     .filter(device => device.id);
 }
 
+function isEmulatorId(deviceId) {
+  return deviceId.startsWith('emulator-');
+}
+
+function isDeviceBooted(deviceId) {
+  const boot = run(adbPath, ['-s', deviceId, 'shell', 'getprop', 'sys.boot_completed']);
+  return (boot.stdout || '').trim() === '1';
+}
+
+function getDeviceAbi(deviceId) {
+  const result = run(adbPath, [
+    '-s',
+    deviceId,
+    'shell',
+    'getprop',
+    'ro.product.cpu.abi',
+  ]);
+  const abi = (result.stdout || '').trim();
+  if (abi === 'arm64-v8a' || abi === 'armeabi-v7a' || abi === 'x86_64' || abi === 'x86') {
+    return abi;
+  }
+  return isEmulatorId(deviceId) ? 'x86_64' : 'arm64-v8a';
+}
+
 function isEmulatorRunning() {
   const result = spawnSync(
     'powershell.exe',
@@ -106,19 +151,33 @@ function killEmulators() {
   sleep(2000);
 }
 
-function getBootedDevice() {
-  const online = listDevices().find(device => device.status === 'device');
-  if (!online) {
-    return null;
-  }
-  const boot = run(adbPath, ['shell', 'getprop', 'sys.boot_completed']);
-  if ((boot.stdout || '').trim() === '1') {
-    return online;
-  }
-  return null;
+function getOnlineDevices() {
+  return listDevices().filter(device => device.status === 'device');
 }
 
-function waitForBootedDevice(timeoutMs) {
+function pickPreferredOnlineDevice(requestedDeviceId) {
+  const online = getOnlineDevices().filter(device => isDeviceBooted(device.id));
+  if (requestedDeviceId) {
+    const match = online.find(device => device.id === requestedDeviceId);
+    if (!match) {
+      throw new Error(
+        `Requested device ${requestedDeviceId} is not online. Connected: ${
+          online.map(device => device.id).join(', ') || 'none'
+        }`,
+      );
+    }
+    return match;
+  }
+
+  // Prefer a physical phone over an emulator when both are present.
+  return (
+    online.find(device => !isEmulatorId(device.id)) ||
+    online[0] ||
+    null
+  );
+}
+
+function waitForBootedDevice(timeoutMs, requestedDeviceId) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const devices = listDevices();
@@ -129,13 +188,20 @@ function waitForBootedDevice(timeoutMs) {
       run(adbPath, ['start-server']);
     }
 
-    const booted = getBootedDevice();
-    if (booted) {
-      return booted;
+    try {
+      const selected = pickPreferredOnlineDevice(requestedDeviceId);
+      if (selected) {
+        return selected;
+      }
+    } catch (error) {
+      // Keep waiting until timeout when a specific device was requested.
+      if (!requestedDeviceId) {
+        throw error;
+      }
     }
 
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
-    console.log(`Waiting for emulator boot... ${elapsed}s`);
+    console.log(`Waiting for device boot... ${elapsed}s`);
     sleep(5000);
   }
   return null;
@@ -175,11 +241,17 @@ function startEmulator(avdName) {
   child.unref();
 }
 
-function ensureDeviceReady() {
-  let device = getBootedDevice();
-  if (device) {
-    console.log(`Using online device ${device.id}`);
-    return device;
+function ensureDeviceReady(requestedDeviceId) {
+  const existing = pickPreferredOnlineDevice(requestedDeviceId);
+  if (existing) {
+    console.log(`Using online device ${existing.id}`);
+    return existing;
+  }
+
+  if (requestedDeviceId) {
+    throw new Error(
+      `Requested device ${requestedDeviceId} is not connected. Plug it in, enable USB debugging, then run: adb devices`,
+    );
   }
 
   if (listDevices().some(device => device.status === 'offline') || isEmulatorRunning()) {
@@ -192,7 +264,7 @@ function ensureDeviceReady() {
   const avds = listAvds();
   if (avds.length === 0) {
     throw new Error(
-      'No Android emulator found. Create one in Android Studio (Device Manager).',
+      'No Android device/emulator found. Connect a phone via USB or create an AVD in Android Studio.',
     );
   }
 
@@ -202,10 +274,10 @@ function ensureDeviceReady() {
   console.log(
     `Waiting up to ${Math.round(bootTimeoutMs / 1000)}s for emulator boot...`,
   );
-  device = waitForBootedDevice(bootTimeoutMs);
+  const device = waitForBootedDevice(bootTimeoutMs);
   if (!device) {
     throw new Error(
-      `Emulator ${avdName} did not become online in time. Open Android Studio > Device Manager, start SpeechToLive_API36, wait for the home screen, then rerun npm run android.`,
+      `Emulator ${avdName} did not become online in time. Start it manually, wait for the home screen, then rerun npm run android.`,
     );
   }
 
@@ -214,10 +286,12 @@ function ensureDeviceReady() {
 }
 
 function installAndLaunch(deviceId) {
-  console.log('Building and installing with Gradle...');
+  const abi = getDeviceAbi(deviceId);
+  console.log(`Building for ABI ${abi} and installing on ${deviceId}...`);
+
   const install = runGradle([
     'app:installDebug',
-    '-PreactNativeArchitectures=x86_64',
+    `-PreactNativeArchitectures=${abi}`,
   ]);
   if ((install.status ?? 1) !== 0) {
     return install.status ?? 1;
@@ -241,16 +315,29 @@ function installAndLaunch(deviceId) {
 }
 
 function main() {
+  const {deviceId: requestedDeviceId} = parseArgs(process.argv.slice(2));
+
   fs.mkdirSync(path.join(home, '.speech-to-live', 'gradle-build'), {
     recursive: true,
   });
 
   run(adbPath, ['start-server']);
-  const device = ensureDeviceReady();
-  run(adbPath, ['emu', 'avd', 'hostmicon'], {stdio: 'ignore'});
+  const device = ensureDeviceReady(requestedDeviceId);
+
+  if (isEmulatorId(device.id)) {
+    run(adbPath, ['-s', device.id, 'emu', 'avd', 'hostmicon'], {
+      stdio: 'ignore',
+    });
+  }
 
   const status = installAndLaunch(device.id);
-  run(adbPath, ['emu', 'avd', 'hostmicon'], {stdio: 'ignore'});
+
+  if (isEmulatorId(device.id)) {
+    run(adbPath, ['-s', device.id, 'emu', 'avd', 'hostmicon'], {
+      stdio: 'ignore',
+    });
+  }
+
   process.exit(status);
 }
 
