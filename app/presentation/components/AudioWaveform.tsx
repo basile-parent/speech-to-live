@@ -1,40 +1,55 @@
-import {useEffect, useRef, useState} from 'react';
+import {useMemo} from 'react';
 import {StyleSheet, View} from 'react-native';
 
-const BAR_COUNT = 48;
-const MIN_BAR_RATIO = 0.06;
+const SEGMENT_COUNT = 36;
+const GREEN_UNTIL = 0.62;
+const YELLOW_UNTIL = 0.82;
 
 type AudioWaveformProps = {
   level: number;
   active: boolean;
+  /** 0 = low sensitivity (cursor right), 1 = high (cursor left). */
+  sensitivity?: number;
 };
 
-function createIdleBars(): number[] {
-  return Array.from({length: BAR_COUNT}, () => MIN_BAR_RATIO);
+function segmentColor(index: number, lit: boolean): string {
+  const ratio = (index + 0.5) / SEGMENT_COUNT;
+  if (ratio < GREEN_UNTIL) {
+    return lit ? '#2EE65A' : '#143D22';
+  }
+  if (ratio < YELLOW_UNTIL) {
+    return lit ? '#F5C518' : '#4A3C0A';
+  }
+  return lit ? '#FF3B30' : '#4A1210';
 }
 
-export function AudioWaveform({level, active}: AudioWaveformProps) {
-  const [bars, setBars] = useState<number[]>(createIdleBars);
-  const levelRef = useRef(level);
+function normalizeLevel(level: number, active: boolean): number {
+  if (!active) {
+    return 0;
+  }
+  // RMS is typically small; amplify for a readable meter after mic gain.
+  return Math.min(1, Math.max(0, level * 6));
+}
 
-  useEffect(() => {
-    levelRef.current = level;
-  }, [level]);
+export function AudioWaveform({
+  level,
+  active,
+  sensitivity = 0.5,
+}: AudioWaveformProps) {
+  const fillRatio = normalizeLevel(level, active);
+  const litCount = Math.round(fillRatio * SEGMENT_COUNT);
+  const cursorRatio = 0.8 - Math.min(0.8, Math.max(0, sensitivity * 0.75));
 
-  useEffect(() => {
-    if (!active) {
-      setBars(createIdleBars());
-      return;
-    }
+  const segments = useMemo(
+    () =>
+      Array.from({length: SEGMENT_COUNT}, (_, index) => ({
+        color: segmentColor(index, index < litCount),
+      })),
+    [litCount],
+  );
 
-    const normalized = Math.min(1, Math.max(0, levelRef.current * 8));
-    setBars(previous => {
-      const next = previous.slice(1);
-      const jitter = 0.85 + Math.random() * 0.3;
-      next.push(Math.max(MIN_BAR_RATIO, normalized * jitter));
-      return next;
-    });
-  }, [active, level]);
+  const percent = Math.round(fillRatio * 100);
+  const sensitivityPercent = Math.round(sensitivity * 100);
 
   return (
     <View
@@ -42,22 +57,29 @@ export function AudioWaveform({level, active}: AudioWaveformProps) {
       accessibilityRole="progressbar"
       accessibilityLabel={
         active
-          ? `Visualisation micro, niveau ${Math.round(Math.min(1, level * 8) * 100)} pourcent`
-          : 'Visualisation micro inactive'
-      }>
-      <View style={styles.bars}>
-        {bars.map((value, index) => (
-          <View key={index} style={styles.barSlot}>
+          ? `Niveau micro ${percent} pourcent, sensibilité ${sensitivityPercent} pourcent`
+          : `Niveau micro inactif, sensibilité ${sensitivityPercent} pourcent`
+      }
+      accessibilityValue={{min: 0, max: 100, now: percent}}>
+      <View style={styles.meterTrack}>
+        <View style={styles.segments}>
+          {segments.map((segment, index) => (
             <View
-              style={[
-                styles.bar,
-                {
-                  height: `${Math.round(value * 100)}%`,
-                },
-              ]}
+              key={index}
+              style={[styles.segment, {backgroundColor: segment.color}]}
             />
-          </View>
-        ))}
+          ))}
+        </View>
+
+        <View
+          pointerEvents="none"
+          style={[
+            styles.cursor,
+            {left: `${Math.round(cursorRatio * 100)}%`},
+          ]}>
+          <View style={styles.cursorHead} />
+          <View style={styles.cursorLine} />
+        </View>
       </View>
     </View>
   );
@@ -65,27 +87,50 @@ export function AudioWaveform({level, active}: AudioWaveformProps) {
 
 const styles = StyleSheet.create({
   container: {
-    height: 88,
-    backgroundColor: '#1F6B3A',
+    height: 72,
+    backgroundColor: '#0A0A0A',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  bars: {
-    flex: 1,
+  meterTrack: {
+    height: 28,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  segments: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+    alignItems: 'stretch',
+    height: 22,
+    gap: 2,
   },
-  barSlot: {
+  segment: {
     flex: 1,
-    height: '100%',
-    justifyContent: 'center',
+    borderRadius: 2,
+  },
+  cursor: {
+    position: 'absolute',
+    top: -6,
+    bottom: -4,
+    width: 14,
+    marginLeft: -7,
     alignItems: 'center',
   },
-  bar: {
-    width: '100%',
-    borderRadius: 1,
+  cursorHead: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFFFFF',
+  },
+  cursorLine: {
+    flex: 1,
+    width: 2,
     backgroundColor: '#FFFFFF',
-    minHeight: 4,
+    borderRadius: 1,
+    marginTop: 1,
   },
 });

@@ -112,6 +112,7 @@ function App() {
       {screen === 'speech' ? (
         <SpeechScreen
           speakerMode={speakerMode}
+          audioSensitivity={audioSensitivity}
           onOpenSettings={() => {
             onOpenSettings().catch(() => undefined);
           }}
