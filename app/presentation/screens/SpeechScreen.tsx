@@ -19,6 +19,7 @@ import {
 import type {SystemInsets, TranscriptBlock} from '../../../shared/types';
 import {getAppTheme} from '../../../shared/theme/appTheme';
 import {AudioWaveform} from '../components/AudioWaveform';
+import {BroomIcon} from '../components/BroomIcon';
 import {
   TRANSCRIPT_FONT_SIZE_DEFAULT,
   usePinchFontSize,
@@ -377,9 +378,7 @@ export function SpeechScreen({
               opacity: !canResetView ? 0.35 : pressed ? 0.7 : 1,
             },
           ]}>
-          <Text style={[styles.trashIcon, {color: theme.textSecondary}]}>
-            🧹
-          </Text>
+          <BroomIcon darkMode={darkMode} size={22} />
         </Pressable>
       </View>
     </>
@@ -472,10 +471,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  trashIcon: {
-    fontSize: 18,
-    lineHeight: 22,
   },
   landscapeMain: {
     flex: 1,
