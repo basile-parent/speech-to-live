@@ -9,6 +9,10 @@ import {
 import {NativeSpeechRecognitionAdapter} from './app/infrastructure/speech/NativeSpeechRecognitionAdapter';
 import {SettingsScreen} from './app/presentation/screens/SettingsScreen';
 import {SpeechScreen} from './app/presentation/screens/SpeechScreen';
+import {
+  DEFAULT_AUDIO_SENSITIVITY,
+  snapSensitivity,
+} from './shared/audio/sensitivity';
 import {getAppTheme} from './shared/theme/appTheme';
 import {
   ZERO_SYSTEM_INSETS,
@@ -18,7 +22,6 @@ import {
 type AppScreen = 'speech' | 'settings';
 
 const settingsPort = new NativeSpeechRecognitionAdapter();
-const DEFAULT_AUDIO_SENSITIVITY = 0.5;
 const DEFAULT_DARK_MODE = true;
 
 function App() {
@@ -51,7 +54,9 @@ function App() {
       });
     settingsPort
       .getAudioSensitivity()
-      .then(setAudioSensitivity)
+      .then(value => {
+        setAudioSensitivity(snapSensitivity(value));
+      })
       .catch(() => {
         setAudioSensitivity(DEFAULT_AUDIO_SENSITIVITY);
       });
@@ -125,18 +130,13 @@ function App() {
 
   const onAudioSensitivityChange = useCallback(
     async (sensitivity: number) => {
+      const next = snapSensitivity(sensitivity);
       const previous = audioSensitivity;
-      setSettingsError(null);
-      setAudioSensitivity(sensitivity);
+      setAudioSensitivity(next);
       try {
-        await settingsPort.setAudioSensitivity(sensitivity);
-      } catch (error) {
+        await settingsPort.setAudioSensitivity(next);
+      } catch {
         setAudioSensitivity(previous);
-        setSettingsError(
-          error instanceof Error
-            ? error.message
-            : 'Impossible de changer la sensibilité',
-        );
       }
     },
     [audioSensitivity],
@@ -162,6 +162,7 @@ function App() {
           darkMode={darkMode}
           speakerMode={speakerMode}
           audioSensitivity={audioSensitivity}
+          onAudioSensitivityChange={onAudioSensitivityChange}
           systemInsets={systemInsets}
           onOpenSettings={() => {
             onOpenSettings().catch(() => undefined);
@@ -187,10 +188,6 @@ function App() {
             speakerMode={speakerMode}
             onSpeakerModeChange={value => {
               onSpeakerModeChange(value).catch(() => undefined);
-            }}
-            audioSensitivity={audioSensitivity}
-            onAudioSensitivityChange={value => {
-              onAudioSensitivityChange(value).catch(() => undefined);
             }}
             onBack={() => {
               setSettingsError(null);

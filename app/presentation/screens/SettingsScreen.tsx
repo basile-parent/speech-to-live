@@ -4,44 +4,11 @@ import {getAppTheme, type AppThemeColors} from '../../../shared/theme/appTheme';
 
 type TranscriptionMode = 'simple' | 'speaker';
 
-const SENSITIVITY_STEPS = [0, 0.25, 0.5, 0.75, 1] as const;
-
-function nearestSensitivityStep(value: number): number {
-  let best: number = SENSITIVITY_STEPS[0];
-  let bestDistance = Math.abs(value - best);
-  for (const step of SENSITIVITY_STEPS) {
-    const distance = Math.abs(value - step);
-    if (distance < bestDistance) {
-      best = step;
-      bestDistance = distance;
-    }
-  }
-  return best;
-}
-
-function sensitivityLabel(value: number): string {
-  if (value <= 0.125) {
-    return 'Faible';
-  }
-  if (value <= 0.375) {
-    return 'Modérée';
-  }
-  if (value <= 0.625) {
-    return 'Normale';
-  }
-  if (value <= 0.875) {
-    return 'Élevée';
-  }
-  return 'Maximale';
-}
-
 type SettingsScreenProps = {
   darkMode: boolean;
   onDarkModeChange: (enabled: boolean) => void;
   speakerMode: boolean;
   onSpeakerModeChange: (enabled: boolean) => void;
-  audioSensitivity: number;
-  onAudioSensitivityChange: (sensitivity: number) => void;
   onBack: () => void;
   disabled?: boolean;
   error?: string | null;
@@ -52,15 +19,12 @@ export function SettingsScreen({
   onDarkModeChange,
   speakerMode,
   onSpeakerModeChange,
-  audioSensitivity,
-  onAudioSensitivityChange,
   onBack,
   disabled = false,
   error = null,
 }: SettingsScreenProps) {
   const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
   const selected: TranscriptionMode = speakerMode ? 'speaker' : 'simple';
-  const selectedSensitivity = nearestSensitivityStep(audioSensitivity);
 
   const selectMode = (mode: TranscriptionMode) => {
     if (disabled) {
@@ -151,63 +115,6 @@ export function SettingsScreen({
               disabled={disabled}
               onPress={() => selectMode('speaker')}
             />
-          </View>
-        </View>
-
-        <View style={[styles.section, styles.sectionSpacing]}>
-          <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            Sensibilité du micro
-          </Text>
-          <Text style={[styles.sectionHint, {color: theme.textSecondary}]}>
-            Augmentez si vous devez parler trop fort pour être compris. Un
-            réglage trop élevé peut capter davantage de bruit.
-          </Text>
-
-          <View
-            style={styles.sensitivityRow}
-            accessibilityRole="adjustable"
-            accessibilityLabel={`Sensibilité ${sensitivityLabel(selectedSensitivity)}`}
-            accessibilityValue={{
-              min: 0,
-              max: SENSITIVITY_STEPS.length - 1,
-              now: SENSITIVITY_STEPS.indexOf(
-                selectedSensitivity as (typeof SENSITIVITY_STEPS)[number],
-              ),
-              text: sensitivityLabel(selectedSensitivity),
-            }}>
-            {SENSITIVITY_STEPS.map(step => {
-              const active = step <= selectedSensitivity + 0.001;
-              const selectedStep = Math.abs(step - selectedSensitivity) < 0.001;
-              return (
-                <Pressable
-                  key={step}
-                  disabled={disabled}
-                  onPress={() => onAudioSensitivityChange(step)}
-                  accessibilityRole="button"
-                  accessibilityState={{selected: selectedStep, disabled}}
-                  accessibilityLabel={`Sensibilité ${sensitivityLabel(step)}`}
-                  style={({pressed}) => [
-                    styles.sensitivityStep,
-                    {backgroundColor: theme.stepTrack},
-                    active ? {backgroundColor: theme.stepActive} : null,
-                    selectedStep ? {backgroundColor: theme.stepSelected} : null,
-                    pressed && !disabled ? styles.optionPressed : null,
-                    disabled ? styles.optionDisabled : null,
-                  ]}
-                />
-              );
-            })}
-          </View>
-          <View style={styles.sensitivityLabels}>
-            <Text style={[styles.sensitivityEdge, {color: theme.textMuted}]}>
-              Faible
-            </Text>
-            <Text style={[styles.sensitivityCurrent, {color: theme.accent}]}>
-              {sensitivityLabel(selectedSensitivity)}
-            </Text>
-            <Text style={[styles.sensitivityEdge, {color: theme.textMuted}]}>
-              Maximale
-            </Text>
           </View>
         </View>
 
@@ -352,29 +259,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     paddingLeft: 28,
-  },
-  sensitivityRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sensitivityStep: {
-    flex: 1,
-    height: 28,
-    borderRadius: 6,
-  },
-  sensitivityLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sensitivityEdge: {
-    fontSize: 13,
-  },
-  sensitivityCurrent: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   error: {
     marginTop: 16,

@@ -121,7 +121,10 @@ class NativeSpeechRecognitionModule(
 
   override fun setAudioSensitivity(sensitivity: Double, promise: Promise) {
     try {
-      val clamped = sensitivity.toFloat().coerceIn(0f, 1f)
+      val clamped =
+        sensitivity
+          .toFloat()
+          .coerceIn(SpeechSession.SENSITIVITY_MIN, SpeechSession.SENSITIVITY_MAX)
       synchronized(sessionLock) {
         ensureSession().setAudioSensitivity(clamped)
         persistAudioSensitivity(clamped)
@@ -292,7 +295,7 @@ class NativeSpeechRecognitionModule(
   private fun readPersistedAudioSensitivity(): Float =
     preferences()
       .getFloat(PREF_AUDIO_SENSITIVITY, SpeechSession.DEFAULT_AUDIO_SENSITIVITY)
-      .coerceIn(0f, 1f)
+      .coerceIn(SpeechSession.SENSITIVITY_MIN, SpeechSession.SENSITIVITY_MAX)
 
   private fun persistAudioSensitivity(sensitivity: Float) {
     preferences().edit().putFloat(PREF_AUDIO_SENSITIVITY, sensitivity).apply()

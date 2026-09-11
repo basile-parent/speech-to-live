@@ -78,6 +78,7 @@ type SpeechScreenProps = {
   darkMode: boolean;
   speakerMode: boolean;
   audioSensitivity: number;
+  onAudioSensitivityChange: (sensitivity: number) => void | Promise<void>;
   systemInsets?: SystemInsets;
   onOpenSettings: () => void;
 };
@@ -86,6 +87,7 @@ export function SpeechScreen({
   darkMode,
   speakerMode,
   audioSensitivity,
+  onAudioSensitivityChange,
   systemInsets = {left: 0, right: 0, top: 0, bottom: 0},
   onOpenSettings,
 }: SpeechScreenProps) {
@@ -108,6 +110,8 @@ export function SpeechScreen({
 
   const scrollRef = useRef<ScrollViewInstance>(null);
   const stickyToBottomRef = useRef(true);
+  const resumeAfterSensitivityDragRef = useRef(false);
+  const sensitivityStopPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const [viewportHeight, setViewportHeight] = useState(0);
   const {
     fontSize,
@@ -190,6 +194,34 @@ export function SpeechScreen({
     }
   }, [isListening, start, stop]);
 
+  const onSensitivityDragStart = useCallback(() => {
+    resumeAfterSensitivityDragRef.current = isListening;
+    if (!isListening) {
+      sensitivityStopPromiseRef.current = Promise.resolve();
+      return;
+    }
+    sensitivityStopPromiseRef.current = stop().catch(() => undefined);
+  }, [isListening, stop]);
+
+  const onSensitivityDragEnd = useCallback(() => {
+    const shouldResume = resumeAfterSensitivityDragRef.current;
+    resumeAfterSensitivityDragRef.current = false;
+    sensitivityStopPromiseRef.current
+      .then(() => {
+        if (!shouldResume) {
+          return;
+        }
+        return start();
+      })
+      .catch(err => {
+        AccessibilityInfo.announceForAccessibility(
+          err instanceof Error
+            ? err.message
+            : 'Impossible de reprendre la transcription',
+        );
+      });
+  }, [start]);
+
   const hasHistory = transcriptBlocks.length > 0;
   const hasContent = hasHistory || partialTranscript.length > 0;
   const canResetView = hasContent;
@@ -209,6 +241,9 @@ export function SpeechScreen({
       sensitivity={audioSensitivity}
       layout={isLandscape ? 'vertical' : 'horizontal'}
       edgeInset={isLandscape ? systemInsets.right : systemInsets.bottom}
+      onSensitivityChange={onAudioSensitivityChange}
+      onSensitivityDragStart={onSensitivityDragStart}
+      onSensitivityDragEnd={onSensitivityDragEnd}
     />
   );
 

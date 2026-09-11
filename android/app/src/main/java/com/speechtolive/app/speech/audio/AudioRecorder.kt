@@ -47,7 +47,8 @@ class AudioRecorder(
 
     val record =
       AudioRecord(
-        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        // MIC avoids VOICE_RECOGNITION AGC, which was neutralizing digital gain.
+        MediaRecorder.AudioSource.MIC,
         sampleRate,
         CHANNEL_CONFIG,
         AUDIO_FORMAT,

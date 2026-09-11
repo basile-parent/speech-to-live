@@ -23,7 +23,7 @@ class SpeechSession(
   private val decodeExecutor: ExecutorService = Executors.newSingleThreadExecutor(),
 ) {
   private val listening = AtomicBoolean(false)
-  private val audioGain = AtomicReference(DEFAULT_AUDIO_GAIN)
+  private val audioSensitivity = AtomicReference(DEFAULT_AUDIO_SENSITIVITY)
   private var currentModel: ModelDescriptor =
     ModelCatalog.requireLanguage(ModelCatalog.DEFAULT_LANGUAGE)
   private var modelLoaded = false
@@ -69,10 +69,12 @@ class SpeechSession(
   fun isSpeakerModeEnabled(): Boolean = speakerTracker?.isEnabled() == true
 
   fun setAudioSensitivity(sensitivity: Float) {
-    audioGain.set(sensitivityToGain(sensitivity))
+    val clamped = sensitivity.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
+    audioSensitivity.set(clamped)
+    Log.i(TAG, "detectionThreshold=$clamped")
   }
 
-  fun getAudioSensitivity(): Float = gainToSensitivity(audioGain.get())
+  fun getAudioSensitivity(): Float = audioSensitivity.get()
 
   @Synchronized
   fun startListening() {
@@ -87,11 +89,13 @@ class SpeechSession(
       }
       recognitionEngine.start()
       audioSource.start { samples, sampleRate ->
-        val boosted = applyGain(samples, audioGain.get())
-        maybeEmitAudioLevel(boosted)
+        // VU meter always reflects raw mic level (independent of the cursor).
+        maybeEmitAudioLevel(samples)
+        val threshold = audioSensitivity.get()
+        val forRecognizer = gateAtThreshold(samples, threshold)
         decodeExecutor.execute {
           try {
-            recognitionEngine.acceptWaveform(boosted, sampleRate)
+            recognitionEngine.acceptWaveform(forRecognizer, sampleRate)
           } catch (error: Throwable) {
             listening.set(false)
             onError(error)
@@ -203,37 +207,39 @@ class SpeechSession(
   companion object {
     private const val TAG = "SpeechToLive"
     private const val AUDIO_LEVEL_EMIT_INTERVAL_MS = 50L
-    /** UI sensitivity 0..1 maps linearly onto this gain range. */
-    const val MIN_AUDIO_GAIN = 1.0f
-    const val MAX_AUDIO_GAIN = 4.0f
-    const val DEFAULT_AUDIO_SENSITIVITY = 0.5f
-    val DEFAULT_AUDIO_GAIN: Float = sensitivityToGain(DEFAULT_AUDIO_SENSITIVITY)
+    /** Must stay aligned with JS `shared/audio/sensitivity.ts`. */
+    const val SENSITIVITY_MIN = 0.1f
+    const val SENSITIVITY_MAX = 0.85f
+    const val DEFAULT_AUDIO_SENSITIVITY = 0.4f
+    /**
+     * Same scale factor as the JS VU meter (`LEVEL_DISPLAY_SCALE` in
+     * `shared/audio/sensitivity.ts`).
+     */
+    private const val LEVEL_DISPLAY_SCALE = 14.0f
 
-    fun sensitivityToGain(sensitivity: Float): Float {
-      val clamped = sensitivity.coerceIn(0f, 1f)
-      return MIN_AUDIO_GAIN + (MAX_AUDIO_GAIN - MIN_AUDIO_GAIN) * clamped
-    }
-
-    fun gainToSensitivity(gain: Float): Float {
-      val clamped = gain.coerceIn(MIN_AUDIO_GAIN, MAX_AUDIO_GAIN)
-      return (clamped - MIN_AUDIO_GAIN) / (MAX_AUDIO_GAIN - MIN_AUDIO_GAIN)
-    }
-
-    private fun applyGain(samples: FloatArray, gain: Float): FloatArray {
-      if (gain == 1.0f) {
+    /**
+     * Cursor position = detection threshold on the VU scale.
+     * Low cursor (10%) => quiet sounds pass. High cursor (85%) => only loud sounds.
+     * Meter level itself is never modified by this threshold.
+     */
+    private fun gateAtThreshold(samples: FloatArray, threshold: Float): FloatArray {
+      val displayLevel = (computeRms(samples) * LEVEL_DISPLAY_SCALE).coerceIn(0f, 1f)
+      val gate = threshold.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
+      if (displayLevel >= gate) {
         return samples
       }
-      val boosted = FloatArray(samples.size)
-      for (index in samples.indices) {
-        val value = samples[index] * gain
-        boosted[index] =
-          when {
-            value > 1f -> 1f
-            value < -1f -> -1f
-            else -> value
-          }
+      return FloatArray(samples.size)
+    }
+
+    private fun computeRms(samples: FloatArray): Float {
+      if (samples.isEmpty()) {
+        return 0f
       }
-      return boosted
+      var sumSquares = 0.0
+      for (sample in samples) {
+        sumSquares += sample * sample
+      }
+      return sqrt(sumSquares / samples.size).toFloat()
     }
   }
 }
