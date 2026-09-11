@@ -1,6 +1,16 @@
 import type {TurboModule} from 'react-native';
 import {TurboModuleRegistry} from 'react-native';
 
+export type RecognitionModelInfo = {
+  id: string;
+  title: string;
+  description: string;
+  sizeBytes: number;
+  downloaded: boolean;
+  bundled: boolean;
+  selected: boolean;
+};
+
 export interface Spec extends TurboModule {
   startListening(): Promise<void>;
   stopListening(): Promise<void>;
@@ -21,6 +31,10 @@ export interface Spec extends TurboModule {
   }>;
   setDarkMode(enabled: boolean): Promise<void>;
   isDarkModeEnabled(): Promise<boolean>;
+  getRecognitionModels(): Promise<RecognitionModelInfo[]>;
+  setRecognitionModel(id: string): Promise<void>;
+  downloadRecognitionModel(id: string): Promise<void>;
+  deleteRecognitionModel(id: string): Promise<void>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }

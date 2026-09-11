@@ -58,6 +58,7 @@ android {
 dependencies {
   implementation("com.facebook.react:react-android")
   implementation("androidx.core:core-ktx:1.16.0")
+  implementation("org.apache.commons:commons-compress:1.26.2")
   implementation(files("libs/sherpa-onnx-1.13.5.aar"))
 
   if (hermesEnabled) {

@@ -13,6 +13,8 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.speechtolive.app.NativeSpeechRecognitionSpec
 import com.speechtolive.app.speech.audio.AudioRecorder
+import com.speechtolive.app.speech.model.ModelCatalog
+import com.speechtolive.app.speech.model.ModelInstaller
 import com.speechtolive.app.speech.recognition.RecognitionResult
 import com.speechtolive.app.speech.recognition.SpeechRecognizer
 import com.speechtolive.app.speech.session.SpeechSession
@@ -25,6 +27,7 @@ class NativeSpeechRecognitionModule(
   private val sessionLock = Any()
   private var session: SpeechSession? = null
   private var speakerTracker: SpeakerTracker? = null
+  private val modelInstaller = ModelInstaller(reactContext)
 
   override fun getName(): String = NAME
 
@@ -179,6 +182,106 @@ class NativeSpeechRecognitionModule(
     }
   }
 
+  override fun getRecognitionModels(promise: Promise) {
+    try {
+      val selectedId = readPersistedRecognitionModelId()
+      val models =
+        Arguments.createArray().also { array ->
+          ModelCatalog.models.forEach { model ->
+            array.pushMap(
+              Arguments.createMap().apply {
+                putString("id", model.id)
+                putString("title", model.title)
+                putString("description", model.description)
+                putDouble("sizeBytes", model.sizeBytes.toDouble())
+                putBoolean("downloaded", ModelCatalog.isAvailable(reactApplicationContext, model))
+                putBoolean("bundled", model.bundled)
+                putBoolean("selected", model.id == selectedId)
+              },
+            )
+          }
+        }
+      promise.resolve(models)
+    } catch (error: Throwable) {
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun setRecognitionModel(id: String, promise: Promise) {
+    try {
+      val model = ModelCatalog.requireModel(id)
+      if (!ModelCatalog.isAvailable(reactApplicationContext, model)) {
+        throw IllegalStateException("Model '${model.id}' is not downloaded")
+      }
+      synchronized(sessionLock) {
+        if (session?.isListening() == true) {
+          throw IllegalStateException("Arrêtez la transcription avant de changer de modèle.")
+        }
+        ensureSession().setRecognitionModel(reactApplicationContext, id)
+        persistRecognitionModelId(id)
+      }
+      Log.i(TAG, "setRecognitionModel ok id=$id")
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      Log.e(TAG, "setRecognitionModel failed", error)
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun downloadRecognitionModel(id: String, promise: Promise) {
+    try {
+      val model = ModelCatalog.requireModel(id)
+      if (model.bundled || ModelCatalog.isAvailable(reactApplicationContext, model)) {
+        emitModelDownloadProgress(id, 1.0, "done")
+        promise.resolve(null)
+        return
+      }
+      modelInstaller.downloadAsync(
+        modelId = id,
+        onProgress = { progress, phase ->
+          emitModelDownloadProgress(id, progress.toDouble(), phase)
+        },
+        onComplete = { result ->
+          result
+            .onSuccess { promise.resolve(null) }
+            .onFailure { error ->
+              promise.reject(ERROR_CODE, error.message, error)
+            }
+        },
+      )
+    } catch (error: Throwable) {
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
+  override fun deleteRecognitionModel(id: String, promise: Promise) {
+    try {
+      val model = ModelCatalog.requireModel(id)
+      if (model.bundled) {
+        throw IllegalStateException("Le modèle par défaut ne peut pas être supprimé.")
+      }
+      synchronized(sessionLock) {
+        if (session?.isListening() == true) {
+          throw IllegalStateException("Arrêtez la transcription avant de supprimer un modèle.")
+        }
+        val wasSelected = readPersistedRecognitionModelId() == id
+        ModelCatalog.deleteInstalled(reactApplicationContext, id)
+        if (wasSelected) {
+          persistRecognitionModelId(ModelCatalog.DEFAULT_MODEL_ID)
+          ensureSession().setRecognitionModel(
+            reactApplicationContext,
+            ModelCatalog.DEFAULT_MODEL_ID,
+          )
+        }
+      }
+      Log.i(TAG, "deleteRecognitionModel ok id=$id")
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      Log.e(TAG, "deleteRecognitionModel failed", error)
+      promise.reject(ERROR_CODE, error.message, error)
+    }
+  }
+
   override fun addListener(eventName: String) = Unit
 
   override fun removeListeners(count: Double) = Unit
@@ -225,6 +328,14 @@ class NativeSpeechRecognitionModule(
         speakerTracker = tracker,
       ).also {
         it.setAudioSensitivity(readPersistedAudioSensitivity())
+        val modelId = readPersistedRecognitionModelId()
+        try {
+          it.setRecognitionModel(reactApplicationContext, modelId)
+        } catch (error: Throwable) {
+          Log.w(TAG, "Falling back to default model after load failure", error)
+          persistRecognitionModelId(ModelCatalog.DEFAULT_MODEL_ID)
+          it.setRecognitionModel(reactApplicationContext, ModelCatalog.DEFAULT_MODEL_ID)
+        }
       }
     session = created
     return created
@@ -264,6 +375,27 @@ class NativeSpeechRecognitionModule(
         putString("message", error.message ?: error.javaClass.simpleName)
       }
     sendEvent(payload)
+  }
+
+  private fun emitModelDownloadProgress(modelId: String, progress: Double, phase: String) {
+    val payload =
+      Arguments.createMap().apply {
+        putString("modelId", modelId)
+        putDouble("progress", progress.coerceIn(0.0, 1.0))
+        putString("phase", phase)
+      }
+    val emit = {
+      if (reactApplicationContext.hasActiveReactInstance()) {
+        reactApplicationContext
+          .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+          .emit(DOWNLOAD_EVENT_NAME, payload)
+      }
+    }
+    if (reactApplicationContext.isOnJSQueueThread) {
+      emit()
+    } else {
+      reactApplicationContext.runOnJSQueueThread(emit)
+    }
   }
 
   private fun sendEvent(payload: WritableMap) {
@@ -306,6 +438,25 @@ class NativeSpeechRecognitionModule(
 
   private fun persistDarkMode(enabled: Boolean) {
     preferences().edit().putBoolean(PREF_DARK_MODE, enabled).apply()
+  }
+
+  private fun readPersistedRecognitionModelId(): String {
+    val stored = preferences().getString(PREF_RECOGNITION_MODEL, ModelCatalog.DEFAULT_MODEL_ID)
+    val id = stored ?: ModelCatalog.DEFAULT_MODEL_ID
+    return try {
+      val model = ModelCatalog.requireModel(id)
+      if (ModelCatalog.isAvailable(reactApplicationContext, model)) {
+        id
+      } else {
+        ModelCatalog.DEFAULT_MODEL_ID
+      }
+    } catch (_: Throwable) {
+      ModelCatalog.DEFAULT_MODEL_ID
+    }
+  }
+
+  private fun persistRecognitionModelId(id: String) {
+    preferences().edit().putString(PREF_RECOGNITION_MODEL, id).apply()
   }
 
   private fun readSystemInsetsDp(): WritableMap {
@@ -355,12 +506,14 @@ class NativeSpeechRecognitionModule(
   companion object {
     const val NAME = "NativeSpeechRecognition"
     const val EVENT_NAME = "SpeechRecognitionTranscript"
+    const val DOWNLOAD_EVENT_NAME = "SpeechRecognitionModelDownload"
     private const val TAG = "SpeechToLive"
     private const val ERROR_CODE = "SPEECH_RECOGNITION_ERROR"
     private const val PREFS_NAME = "speech_to_live_settings"
     private const val PREF_SPEAKER_MODE = "speaker_mode"
     private const val PREF_AUDIO_SENSITIVITY = "audio_sensitivity"
     private const val PREF_DARK_MODE = "dark_mode"
+    private const val PREF_RECOGNITION_MODEL = "recognition_model"
     private const val DEFAULT_DARK_MODE = true
   }
 }

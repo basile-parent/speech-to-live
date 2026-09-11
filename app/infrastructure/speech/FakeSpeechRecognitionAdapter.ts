@@ -60,6 +60,37 @@ export class FakeSpeechRecognitionAdapter implements SpeechRecognitionPort {
     return this.darkMode;
   }
 
+  async getRecognitionModels() {
+    return [
+      {
+        id: 'fr-kroko',
+        title: 'Français Kroko (défaut)',
+        description:
+          '+ Léger et réactif en direct. − Moins à l’aise sur bruit fort ou diction très soutenue.',
+        sizeBytes: 57_200_000,
+        downloaded: true,
+        bundled: true,
+        selected: true,
+      },
+    ];
+  }
+
+  async setRecognitionModel(_id: string): Promise<void> {}
+
+  async downloadRecognitionModel(_id: string): Promise<void> {}
+
+  async deleteRecognitionModel(_id: string): Promise<void> {}
+
+  subscribeModelDownload(
+    _listener: (event: {
+      modelId: string;
+      progress: number;
+      phase: string;
+    }) => void,
+  ): () => void {
+    return () => undefined;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {

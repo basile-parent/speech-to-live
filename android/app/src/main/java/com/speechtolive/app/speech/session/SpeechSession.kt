@@ -40,12 +40,21 @@ class SpeechSession(
 
   @Synchronized
   fun setLanguage(language: String) {
-    val nextModel = ModelCatalog.requireLanguage(language)
-    if (modelLoaded && currentModel == nextModel) {
+    // French-only for now; keep API for future locales.
+    val normalized = language.trim().lowercase()
+    if (normalized != ModelCatalog.DEFAULT_LANGUAGE) {
+      throw IllegalArgumentException("Unsupported language '$language'")
+    }
+  }
+
+  @Synchronized
+  fun setRecognitionModel(context: android.content.Context, modelId: String) {
+    ensureIdle("setRecognitionModel")
+    val descriptor = ModelCatalog.resolveDescriptor(context, modelId)
+    if (modelLoaded && currentModel == descriptor) {
       return
     }
-    ensureIdle("setLanguage")
-    currentModel = nextModel
+    currentModel = descriptor
     recognitionEngine.loadModel(currentModel)
     modelLoaded = true
   }

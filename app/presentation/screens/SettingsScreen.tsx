@@ -1,6 +1,17 @@
-import {useMemo} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {useCallback, useMemo, useState} from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {getAppTheme, type AppThemeColors} from '../../../shared/theme/appTheme';
+import {
+  formatModelSize,
+  type RecognitionModelInfo,
+} from '../../../shared/types';
 
 type TranscriptionMode = 'simple' | 'speaker';
 
@@ -9,6 +20,12 @@ type SettingsScreenProps = {
   onDarkModeChange: (enabled: boolean) => void;
   speakerMode: boolean;
   onSpeakerModeChange: (enabled: boolean) => void;
+  recognitionModels: RecognitionModelInfo[];
+  downloadingModelId: string | null;
+  downloadProgress: number;
+  onSelectRecognitionModel: (id: string) => void;
+  onConfirmDownloadModel: (id: string) => void;
+  onDeleteRecognitionModel: (id: string) => void;
   onBack: () => void;
   disabled?: boolean;
   error?: string | null;
@@ -19,12 +36,22 @@ export function SettingsScreen({
   onDarkModeChange,
   speakerMode,
   onSpeakerModeChange,
+  recognitionModels,
+  downloadingModelId,
+  downloadProgress,
+  onSelectRecognitionModel,
+  onConfirmDownloadModel,
+  onDeleteRecognitionModel,
   onBack,
   disabled = false,
   error = null,
 }: SettingsScreenProps) {
   const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
   const selected: TranscriptionMode = speakerMode ? 'speaker' : 'simple';
+  const selectedModelId =
+    recognitionModels.find(model => model.selected)?.id ??
+    recognitionModels[0]?.id ??
+    null;
 
   const selectMode = (mode: TranscriptionMode) => {
     if (disabled) {
@@ -36,6 +63,69 @@ export function SettingsScreen({
     }
     onSpeakerModeChange(enabled);
   };
+
+  const requestModelSelection = useCallback(
+    (model: RecognitionModelInfo) => {
+      if (disabled || downloadingModelId) {
+        return;
+      }
+      if (model.selected) {
+        return;
+      }
+      if (model.downloaded || model.bundled) {
+        onSelectRecognitionModel(model.id);
+        return;
+      }
+
+      Alert.alert(
+        'Télécharger le modèle ?',
+        `« ${model.title} » n’est pas encore installé.\n\nTaille du téléchargement : environ ${formatModelSize(model.sizeBytes)}.\n\nVoulez-vous le télécharger maintenant ?`,
+        [
+          {
+            text: 'Non',
+            style: 'cancel',
+          },
+          {
+            text: 'Oui',
+            onPress: () => {
+              onConfirmDownloadModel(model.id);
+            },
+          },
+        ],
+      );
+    },
+    [disabled, downloadingModelId, onConfirmDownloadModel, onSelectRecognitionModel],
+  );
+
+  const requestModelDeletion = useCallback(
+    (model: RecognitionModelInfo) => {
+      if (disabled || downloadingModelId) {
+        return;
+      }
+      if (model.bundled || !model.downloaded) {
+        return;
+      }
+
+      Alert.alert(
+        'Supprimer le modèle ?',
+        `« ${model.title} » sera retiré de l’appareil (~${formatModelSize(model.sizeBytes)} libérés).\n\nVous pourrez le télécharger à nouveau plus tard.`,
+        [
+          {
+            text: 'Annuler',
+            style: 'cancel',
+          },
+          {
+            text: 'Supprimer',
+            style: 'destructive',
+            onPress: () => {
+              onDeleteRecognitionModel(model.id);
+            },
+          },
+        ],
+      );
+    },
+    [disabled, downloadingModelId, onDeleteRecognitionModel],
+  );
 
   return (
     <View
@@ -118,6 +208,102 @@ export function SettingsScreen({
           </View>
         </View>
 
+        <View style={[styles.section, styles.sectionSpacing]}>
+          <Text style={[styles.sectionTitle, {color: theme.text}]}>
+            Modèle de reconnaissance
+          </Text>
+          {downloadingModelId ? (
+            <View
+              style={styles.downloadProgressBlock}
+              accessibilityRole="progressbar"
+              accessibilityLabel={`Téléchargement ${Math.round(downloadProgress * 100)} pourcent`}
+              accessibilityValue={{
+                min: 0,
+                max: 100,
+                now: Math.round(downloadProgress * 100),
+              }}>
+              <View
+                style={[
+                  styles.downloadProgressTrack,
+                  {backgroundColor: theme.stepTrack},
+                ]}>
+                <View
+                  style={[
+                    styles.downloadProgressFill,
+                    {
+                      backgroundColor: theme.accent,
+                      width: `${Math.round(Math.min(1, Math.max(0, downloadProgress)) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[styles.downloadProgressLabel, {color: theme.textMuted}]}>
+                {Math.round(downloadProgress * 100)}%
+              </Text>
+            </View>
+          ) : null}
+          <Text style={[styles.sectionHint, {color: theme.textSecondary}]}>
+            Seul le modèle par défaut est inclus. Les autres doivent être
+            téléchargés avant utilisation.
+          </Text>
+
+          <View style={styles.options}>
+            {recognitionModels.map(model => {
+              const isDownloading = downloadingModelId === model.id;
+              const needsDownload = !model.downloaded && !model.bundled;
+              const canDelete = model.downloaded && !model.bundled && !isDownloading;
+              const description = isDownloading
+                ? 'Téléchargement en cours…'
+                : model.description;
+              return (
+                <View key={model.id} style={styles.modelRow}>
+                  <View style={styles.modelOptionGrow}>
+                    <ModeOption
+                      theme={theme}
+                      title={model.title}
+                      description={description}
+                      selected={model.id === selectedModelId}
+                      disabled={disabled || Boolean(downloadingModelId)}
+                      showDownloadIcon={needsDownload && !isDownloading}
+                      onPress={() => {
+                        requestModelSelection(model);
+                      }}
+                    />
+                  </View>
+                  {canDelete ? (
+                    <Pressable
+                      onPress={() => {
+                        requestModelDeletion(model);
+                      }}
+                      disabled={disabled || Boolean(downloadingModelId)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Supprimer ${model.title}`}
+                      hitSlop={8}
+                      style={({pressed}) => [
+                        styles.deleteButton,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface,
+                          opacity:
+                            disabled || downloadingModelId
+                              ? 0.45
+                              : pressed
+                                ? 0.7
+                                : 1,
+                        },
+                      ]}>
+                      <Text style={[styles.deleteIcon, {color: theme.error}]}>
+                        🗑
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         {error ? (
           <Text
             style={[styles.error, {color: theme.error}]}
@@ -136,6 +322,7 @@ function ModeOption({
   description,
   selected,
   disabled,
+  showDownloadIcon = false,
   onPress,
 }: {
   theme: AppThemeColors;
@@ -143,6 +330,7 @@ function ModeOption({
   description: string;
   selected: boolean;
   disabled: boolean;
+  showDownloadIcon?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -151,7 +339,9 @@ function ModeOption({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{selected, disabled}}
-      accessibilityLabel={title}
+      accessibilityLabel={
+        showDownloadIcon ? `${title}, téléchargement requis` : title
+      }
       style={({pressed}) => [
         styles.option,
         {
@@ -171,7 +361,17 @@ function ModeOption({
             },
           ]}
         />
-        <Text style={[styles.optionTitle, {color: theme.text}]}>{title}</Text>
+        <Text style={[styles.optionTitle, {color: theme.text, flex: 1}]}>
+          {title}
+        </Text>
+        {showDownloadIcon ? (
+          <Text
+            style={[styles.downloadIcon, {color: theme.accent}]}
+            accessibilityElementsHidden
+            importantForAccessibility="no">
+            ⬇
+          </Text>
+        ) : null}
       </View>
       <Text style={[styles.optionDescription, {color: theme.textSecondary}]}>
         {description}
@@ -219,6 +419,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  downloadProgressBlock: {
+    gap: 6,
+  },
+  downloadProgressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  downloadProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  downloadProgressLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   sectionHint: {
     fontSize: 15,
     lineHeight: 22,
@@ -226,6 +442,26 @@ const styles = StyleSheet.create({
   options: {
     marginTop: 8,
     gap: 12,
+  },
+  modelRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  modelOptionGrow: {
+    flex: 1,
+    minWidth: 0,
+  },
+  deleteButton: {
+    width: 48,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteIcon: {
+    fontSize: 18,
+    lineHeight: 22,
   },
   option: {
     borderWidth: 1.5,
@@ -254,6 +490,11 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  downloadIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   optionDescription: {
     fontSize: 14,

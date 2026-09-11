@@ -16,6 +16,7 @@ import {
 import {getAppTheme} from './shared/theme/appTheme';
 import {
   ZERO_SYSTEM_INSETS,
+  type RecognitionModelInfo,
   type SystemInsets,
 } from './shared/types';
 
@@ -31,6 +32,13 @@ function App() {
   const [audioSensitivity, setAudioSensitivity] = useState(
     DEFAULT_AUDIO_SENSITIVITY,
   );
+  const [recognitionModels, setRecognitionModels] = useState<
+    RecognitionModelInfo[]
+  >([]);
+  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
+    null,
+  );
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [systemInsets, setSystemInsets] =
     useState<SystemInsets>(ZERO_SYSTEM_INSETS);
   const [settingsBusy, setSettingsBusy] = useState(false);
@@ -38,6 +46,12 @@ function App() {
   const topInset =
     Platform.OS === 'android' ? (StatusBar.currentHeight ?? 12) : 12;
   const theme = useMemo(() => getAppTheme(darkMode), [darkMode]);
+
+  const refreshRecognitionModels = useCallback(async () => {
+    const models = await settingsPort.getRecognitionModels();
+    setRecognitionModels(models);
+    return models;
+  }, []);
 
   useEffect(() => {
     settingsPort
@@ -60,6 +74,19 @@ function App() {
       .catch(() => {
         setAudioSensitivity(DEFAULT_AUDIO_SENSITIVITY);
       });
+    refreshRecognitionModels().catch(() => {
+      setRecognitionModels([]);
+    });
+  }, [refreshRecognitionModels]);
+
+  useEffect(() => {
+    const unsubscribe = settingsPort.subscribeModelDownload(event => {
+      if (event.modelId) {
+        setDownloadingModelId(event.modelId);
+      }
+      setDownloadProgress(event.progress);
+    });
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -142,6 +169,104 @@ function App() {
     [audioSensitivity],
   );
 
+  const onSelectRecognitionModel = useCallback(
+    async (id: string) => {
+      if (settingsBusy || downloadingModelId) {
+        return;
+      }
+      setSettingsError(null);
+      const previous = recognitionModels;
+      setRecognitionModels(models =>
+        models.map(model => ({...model, selected: model.id === id})),
+      );
+      setSettingsBusy(true);
+      try {
+        if (await settingsPort.isListening()) {
+          throw new Error(
+            'Arrêtez la transcription avant de changer de modèle.',
+          );
+        }
+        await settingsPort.setRecognitionModel(id);
+        await refreshRecognitionModels();
+      } catch (error) {
+        setRecognitionModels(previous);
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de changer de modèle',
+        );
+      } finally {
+        setSettingsBusy(false);
+      }
+    },
+    [downloadingModelId, recognitionModels, refreshRecognitionModels, settingsBusy],
+  );
+
+  const onConfirmDownloadModel = useCallback(
+    async (id: string) => {
+      if (settingsBusy || downloadingModelId) {
+        return;
+      }
+      setSettingsError(null);
+      const previous = recognitionModels;
+      setRecognitionModels(models =>
+        models.map(model => ({...model, selected: model.id === id})),
+      );
+      setDownloadProgress(0);
+      setDownloadingModelId(id);
+      try {
+        await settingsPort.downloadRecognitionModel(id);
+        await settingsPort.setRecognitionModel(id);
+        await refreshRecognitionModels();
+      } catch (error) {
+        setRecognitionModels(previous);
+        await refreshRecognitionModels().catch(() => undefined);
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : 'Téléchargement du modèle impossible',
+        );
+      } finally {
+        setDownloadingModelId(null);
+        setDownloadProgress(0);
+      }
+    },
+    [
+      downloadingModelId,
+      recognitionModels,
+      refreshRecognitionModels,
+      settingsBusy,
+    ],
+  );
+
+  const onDeleteRecognitionModel = useCallback(
+    async (id: string) => {
+      if (settingsBusy || downloadingModelId) {
+        return;
+      }
+      setSettingsError(null);
+      setSettingsBusy(true);
+      try {
+        if (await settingsPort.isListening()) {
+          throw new Error(
+            'Arrêtez la transcription avant de supprimer un modèle.',
+          );
+        }
+        await settingsPort.deleteRecognitionModel(id);
+        await refreshRecognitionModels();
+      } catch (error) {
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de supprimer le modèle',
+        );
+      } finally {
+        setSettingsBusy(false);
+      }
+    },
+    [downloadingModelId, refreshRecognitionModels, settingsBusy],
+  );
+
   const onOpenSettings = useCallback(async () => {
     setSettingsError(null);
     try {
@@ -151,8 +276,9 @@ function App() {
     } catch {
       // Still open settings; SpeechScreen also stops on unmount.
     }
+    refreshRecognitionModels().catch(() => undefined);
     setScreen('settings');
-  }, []);
+  }, [refreshRecognitionModels]);
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
@@ -189,11 +315,23 @@ function App() {
             onSpeakerModeChange={value => {
               onSpeakerModeChange(value).catch(() => undefined);
             }}
+            recognitionModels={recognitionModels}
+            downloadingModelId={downloadingModelId}
+            downloadProgress={downloadProgress}
+            onSelectRecognitionModel={id => {
+              onSelectRecognitionModel(id).catch(() => undefined);
+            }}
+            onConfirmDownloadModel={id => {
+              onConfirmDownloadModel(id).catch(() => undefined);
+            }}
+            onDeleteRecognitionModel={id => {
+              onDeleteRecognitionModel(id).catch(() => undefined);
+            }}
             onBack={() => {
               setSettingsError(null);
               setScreen('speech');
             }}
-            disabled={settingsBusy}
+            disabled={settingsBusy || Boolean(downloadingModelId)}
             error={settingsError}
           />
         </View>

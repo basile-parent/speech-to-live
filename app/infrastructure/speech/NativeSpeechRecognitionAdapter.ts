@@ -7,6 +7,7 @@ import type {
 import NativeSpeechRecognition from '../../../specs/NativeSpeechRecognition';
 
 const EVENT_NAME = 'SpeechRecognitionTranscript';
+const DOWNLOAD_EVENT_NAME = 'SpeechRecognitionModelDownload';
 
 type NativeTranscriptPayload = {
   type: 'partial' | 'final' | 'audioLevel' | 'error';
@@ -90,6 +91,44 @@ export class NativeSpeechRecognitionAdapter implements SpeechRecognitionPort {
 
   isDarkModeEnabled(): Promise<boolean> {
     return NativeSpeechRecognition.isDarkModeEnabled();
+  }
+
+  getRecognitionModels() {
+    return NativeSpeechRecognition.getRecognitionModels();
+  }
+
+  setRecognitionModel(id: string): Promise<void> {
+    return NativeSpeechRecognition.setRecognitionModel(id);
+  }
+
+  downloadRecognitionModel(id: string): Promise<void> {
+    return NativeSpeechRecognition.downloadRecognitionModel(id);
+  }
+
+  deleteRecognitionModel(id: string): Promise<void> {
+    return NativeSpeechRecognition.deleteRecognitionModel(id);
+  }
+
+  subscribeModelDownload(
+    listener: (event: {
+      modelId: string;
+      progress: number;
+      phase: string;
+    }) => void,
+  ): () => void {
+    const subscription = DeviceEventEmitter.addListener(
+      DOWNLOAD_EVENT_NAME,
+      (payload: {modelId?: string; progress?: number; phase?: string}) => {
+        listener({
+          modelId: payload.modelId ?? '',
+          progress: Math.min(1, Math.max(0, Number(payload.progress) || 0)),
+          phase: payload.phase ?? 'download',
+        });
+      },
+    );
+    return () => {
+      subscription.remove();
+    };
   }
 
   subscribe(listener: TranscriptListener): () => void {

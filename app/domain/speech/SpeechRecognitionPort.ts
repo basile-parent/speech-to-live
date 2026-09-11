@@ -1,4 +1,8 @@
-import type {SystemInsets, TranscriptEvent} from '../../../shared/types';
+import type {
+  RecognitionModelInfo,
+  SystemInsets,
+  TranscriptEvent,
+} from '../../../shared/types';
 
 export type TranscriptListener = (event: TranscriptEvent) => void;
 
@@ -15,5 +19,16 @@ export interface SpeechRecognitionPort {
   getSystemInsets(): Promise<SystemInsets>;
   setDarkMode(enabled: boolean): Promise<void>;
   isDarkModeEnabled(): Promise<boolean>;
+  getRecognitionModels(): Promise<RecognitionModelInfo[]>;
+  setRecognitionModel(id: string): Promise<void>;
+  downloadRecognitionModel(id: string): Promise<void>;
+  deleteRecognitionModel(id: string): Promise<void>;
+  subscribeModelDownload(
+    listener: (event: {
+      modelId: string;
+      progress: number;
+      phase: string;
+    }) => void,
+  ): () => void;
   subscribe(listener: TranscriptListener): () => void;
 }
