@@ -5,6 +5,7 @@ import type {
   FinalTranscriptSegment,
   TranscriptBlock,
 } from '../../../shared/types';
+import {formatSpeakerLabel} from '../../../shared/speaker/emojis';
 
 type UseSpeechRecognitionResult = {
   isListening: boolean;
@@ -191,7 +192,7 @@ export function useSpeechRecognition(
       finalSegments
         .map(segment =>
           segment.speakerLabel
-            ? `${segment.speakerLabel}: ${segment.text}`
+            ? `${formatSpeakerLabel(segment.speakerLabel)}: ${segment.text}`
             : segment.text,
         )
         .join('\n'),

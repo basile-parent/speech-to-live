@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.log10
 import kotlin.math.sqrt
 
 class SpeechSession(
@@ -218,26 +219,36 @@ class SpeechSession(
     private const val AUDIO_LEVEL_EMIT_INTERVAL_MS = 50L
     /** Must stay aligned with JS `shared/audio/sensitivity.ts`. */
     const val SENSITIVITY_MIN = 0.1f
-    const val SENSITIVITY_MAX = 0.85f
+    const val SENSITIVITY_MAX = 0.9f
     const val DEFAULT_AUDIO_SENSITIVITY = 0.4f
     /**
-     * Same scale factor as the JS VU meter (`LEVEL_DISPLAY_SCALE` in
-     * `shared/audio/sensitivity.ts`).
+     * Same dB floor/ceiling as JS `LEVEL_DB_MIN` / `LEVEL_DB_MAX` in
+     * `shared/audio/sensitivity.ts`.
      */
-    private const val LEVEL_DISPLAY_SCALE = 14.0f
+    private const val LEVEL_DB_MIN = -55f
+    private const val LEVEL_DB_MAX = -12f
 
     /**
      * Cursor position = detection threshold on the VU scale.
-     * Low cursor (10%) => quiet sounds pass. High cursor (85%) => only loud sounds.
+     * Low cursor (10%) => quiet sounds pass. High cursor (90%) => only loud sounds.
      * Meter level itself is never modified by this threshold.
      */
     private fun gateAtThreshold(samples: FloatArray, threshold: Float): FloatArray {
-      val displayLevel = (computeRms(samples) * LEVEL_DISPLAY_SCALE).coerceIn(0f, 1f)
+      val displayLevel = rmsToDisplayLevel(computeRms(samples))
       val gate = threshold.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
       if (displayLevel >= gate) {
         return samples
       }
       return FloatArray(samples.size)
+    }
+
+    /** Must match JS `rmsToDisplayLevel` in `shared/audio/sensitivity.ts`. */
+    private fun rmsToDisplayLevel(rms: Float): Float {
+      if (rms <= 0f) {
+        return 0f
+      }
+      val db = 20f * log10(rms)
+      return ((db - LEVEL_DB_MIN) / (LEVEL_DB_MAX - LEVEL_DB_MIN)).coerceIn(0f, 1f)
     }
 
     private fun computeRms(samples: FloatArray): Float {

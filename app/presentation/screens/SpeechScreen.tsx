@@ -17,6 +17,7 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import type {SystemInsets, TranscriptBlock} from '../../../shared/types';
+import {formatSpeakerLabel} from '../../../shared/speaker/emojis';
 import {getAppTheme} from '../../../shared/theme/appTheme';
 import {AudioWaveform} from '../components/AudioWaveform';
 import {BroomIcon} from '../components/BroomIcon';
@@ -283,7 +284,7 @@ export function SpeechScreen({
                             lineHeight: speakerLabelLineHeight,
                           },
                         ]}>
-                        {segment.speakerLabel}
+                        {formatSpeakerLabel(segment.speakerLabel)}
                       </Text>
                     ) : null}
                     <Text

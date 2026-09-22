@@ -47,7 +47,7 @@ test('useSpeechRecognition updates partial and final transcripts', async () => {
   await ReactTestRenderer.act(() => {
     port.emit({type: 'final', text: 'bonjour', speakerLabel: 'Locuteur 1'});
   });
-  expect(latest!.finalTranscript).toBe('Locuteur 1: bonjour');
+  expect(latest!.finalTranscript).toBe('🦊 Locuteur 1: bonjour');
   expect(latest!.finalSegments).toEqual([
     {text: 'bonjour', speakerLabel: 'Locuteur 1'},
   ]);

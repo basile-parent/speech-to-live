@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import {
   clampSensitivity,
-  LEVEL_DISPLAY_SCALE,
+  rmsToDisplayLevel,
   snapSensitivity,
   trackPositionToSensitivity,
 } from '../../../shared/audio/sensitivity';
@@ -49,7 +49,7 @@ function normalizeLevel(level: number, active: boolean): number {
   if (!active) {
     return 0;
   }
-  return Math.min(1, Math.max(0, level * LEVEL_DISPLAY_SCALE));
+  return rmsToDisplayLevel(level);
 }
 
 export function AudioWaveform({
@@ -191,7 +191,7 @@ export function AudioWaveform({
           ? `Seuil de détection ${thresholdPercent} pourcent, niveau ${percent} pourcent`
           : `Seuil de détection ${thresholdPercent} pourcent`
       }
-      accessibilityValue={{min: 10, max: 85, now: thresholdPercent}}>
+      accessibilityValue={{min: 10, max: 90, now: thresholdPercent}}>
       <View
         style={[styles.meterTrack, isVertical && styles.meterTrackVertical]}
         onLayout={onTrackLayout}
